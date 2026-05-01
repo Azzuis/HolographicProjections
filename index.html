@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spherical Projection Density</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Space+Grotesk:wght@400;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #12121a;
+    --border: #1e1e2e;
+    --text: #c8c8d4;
+    --text-dim: #6a6a7a;
+    --accent: #4af0c0;
+    --accent2: #f04a8a;
+    --hot: #ff6030;
+    --cold: #2040ff;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+  }
+
+  header .subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .canvas-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #mainCanvas {
+    background: transparent;
+  }
+
+  /* 2D map inset */
+  .map-inset {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .map-inset .label {
+    font-size: 9px;
+    color: var(--text-dim);
+    padding: 3px 6px;
+    background: rgba(0,0,0,0.4);
+    position: absolute;
+    top: 0; left: 0;
+    z-index: 2;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* controls panel */
+  .controls {
+    width: 260px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .controls h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  .ctrl-group {
+    margin-bottom: 16px;
+  }
+
+  .ctrl-group label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .ctrl-group select,
+  .ctrl-group input[type="range"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 6px;
+    font-family: inherit;
+    font-size: 11px;
+    border-radius: 3px;
+    outline: none;
+  }
+
+  .ctrl-group input[type="range"] {
+    -webkit-appearance: none;
+    height: 4px;
+    border: none;
+    border-radius: 2px;
+    background: var(--border);
+    cursor: pointer;
+  }
+
+  .ctrl-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  .ctrl-group .value {
+    font-size: 11px;
+    color: var(--accent);
+    float: right;
+    margin-top: -16px;
+  }
+
+  .legend {
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .legend canvas {
+    width: 100%;
+    height: 14px;
+    border-radius: 2px;
+  }
+
+  .legend .bounds {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .info-line {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  .info-line span {
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Spherical Projection Density</h1>
+    <div class="subtitle">Surface → Volume holographic encoding</div>
+  </div>
+</header>
+
+<div class="main-layout">
+  <div class="canvas-wrap">
+    <canvas id="mainCanvas"></canvas>
+    <div class="map-inset">
+      <div class="label">2D Surface Map</div>
+      <canvas id="mapCanvas" width="200" height="100"></canvas>
+    </div>
+  </div>
+
+  <div class="controls">
+    <h2>Surface Shape</h2>
+    <div class="ctrl-group">
+      <label>Pattern</label>
+      <select id="patternSelect">
+        <option value="earth">Earth (Continents)</option>
+        <option value="single_cap">Single Cap</option>
+        <option value="two_caps">Two Caps (Antipodal)</option>
+        <option value="band">Equatorial Band</option>
+        <option value="spots">Random Spots</option>
+        <option value="checker">Checkerboard</option>
+      </select>
+    </div>
+
+    <h2>Cross Section</h2>
+    <div class="ctrl-group">
+      <label>Slice Axis</label>
+      <select id="sliceAxis">
+        <option value="z">XY Plane (Z slice)</option>
+        <option value="y">XZ Plane (Y slice)</option>
+        <option value="x">YZ Plane (X slice)</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <label>Slice Position</label>
+      <input type="range" id="slicePos" min="-100" max="100" value="0">
+      <div class="value" id="slicePosVal">0.00</div>
+    </div>
+
+    <h2>Projection</h2>
+    <div class="ctrl-group">
+      <label>Encoding Mode</label>
+      <select id="encodingMode">
+        <option value="magnitude">Magnitude (|d|)</option>
+        <option value="signed">Signed (dipole)</option>
+        <option value="inverse">Inverse (1/d²)</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <label>Surface Resolution</label>
+      <input type="range" id="surfRes" min="20" max="80" value="40">
+      <div class="value" id="surfResVal">40</div>
+    </div>
+    <div class="ctrl-group">
+      <label>Parametric t</label>
+      <input type="range" id="paramT" min="0" max="100" value="0">
+      <div class="value" id="paramTVal">0.00</div>
+    </div>
+
+    <div class="legend">
+      <label style="font-size:10px;color:var(--text-dim);margin-bottom:4px;display:block;">Density Scale</label>
+      <canvas id="legendCanvas" height="14"></canvas>
+      <div class="bounds">
+        <span>−max</span>
+        <span>0</span>
+        <span>+max</span>
+      </div>
+    </div>
+
+    <div class="info-line" id="infoLine">
+      Hover cross section for point density
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SPHERICAL PROJECTION DENSITY VISUALIZER
+// ============================================================
+
+const mainCanvas = document.getElementById('mainCanvas');
+const mainCtx = mainCanvas.getContext('2d');
+const mapCanvas = document.getElementById('mapCanvas');
+const mapCtx = mapCanvas.getContext('2d');
+const legendCanvas = document.getElementById('legendCanvas');
+const legendCtx = legendCanvas.getContext('2d');
+
+// Controls
+const patternSelect = document.getElementById('patternSelect');
+const sliceAxis = document.getElementById('sliceAxis');
+const slicePos = document.getElementById('slicePos');
+const slicePosVal = document.getElementById('slicePosVal');
+const encodingMode = document.getElementById('encodingMode');
+const surfRes = document.getElementById('surfRes');
+const surfResVal = document.getElementById('surfResVal');
+const paramT = document.getElementById('paramT');
+const paramTVal = document.getElementById('paramTVal');
+const infoLine = document.getElementById('infoLine');
+
+const SPHERE_R = 1.0;
+
+// ---- SURFACE PATTERN FUNCTIONS ----
+// Return 1.0 for "land", 0.0 for "ocean" given (theta, phi, t)
+// theta: [0, PI], phi: [0, 2*PI]
+
+function patternEarth(theta, phi, t) {
+  // Simplified continent-like shapes using spherical harmonic-ish blobs
+  const lat = Math.PI / 2 - theta; // [-PI/2, PI/2]
+  const lon = phi - Math.PI + t * 0.5; // shift with t
+
+  // A few "continent" blobs
+  const blobs = [
+    { lat: 0.8, lon: -0.5, r: 0.55 },   // "North America"
+    { lat: 0.2, lon: -0.8, r: 0.35 },    // "South America"
+    { lat: 0.85, lon: 0.2, r: 0.4 },     // "Europe"
+    { lat: 0.6, lon: 0.5, r: 0.55 },     // "Africa"
+    { lat: 0.7, lon: 1.5, r: 0.6 },      // "Asia"
+    { lat: -0.5, lon: 2.0, r: 0.45 },    // "Australia"
+    { lat: -1.2, lon: 0.0, r: 0.5 },     // "Antarctica"
+  ];
+
+  for (const b of blobs) {
+    // Great circle distance approximation
+    const dlat = lat - b.lat;
+    const dlon = ((lon - b.lon + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const dist = Math.sqrt(dlat * dlat + dlon * dlon * Math.cos(lat) * Math.cos(lat));
+    if (dist < b.r) return 1.0;
+  }
+  return 0.0;
+}
+
+function patternSingleCap(theta, phi, t) {
+  const capCenter = t * 0.3;
+  return theta < (0.6 + 0.3 * Math.sin(t)) ? 1.0 : 0.0;
+}
+
+function patternTwoCaps(theta, phi, t) {
+  const size = 0.5 + 0.2 * Math.sin(t * 2);
+  return (theta < size || theta > Math.PI - size) ? 1.0 : 0.0;
+}
+
+function patternBand(theta, phi, t) {
+  const center = Math.PI / 2 + 0.3 * Math.sin(t);
+  const width = 0.3 + 0.15 * Math.cos(t * 1.5);
+  return Math.abs(theta - center) < width ? 1.0 : 0.0;
+}
+
+function patternSpots(theta, phi, t) {
+  // Deterministic "random" spots using sin products
+  const v = Math.sin(theta * 5.1 + t * 0.3) * Math.sin(phi * 3.7 + t * 0.2)
+          + Math.sin(theta * 7.3 - t * 0.15) * Math.cos(phi * 5.1);
+  return v > 0.5 ? 1.0 : 0.0;
+}
+
+function patternChecker(theta, phi, t) {
+  const nTheta = 6;
+  const nPhi = 12;
+  const it = Math.floor(theta / Math.PI * nTheta);
+  const ip = Math.floor((phi + t * 0.3) / (2 * Math.PI) * nPhi);
+  return (it + ip) % 2 === 0 ? 1.0 : 0.0;
+}
+
+const patterns = {
+  earth: patternEarth,
+  single_cap: patternSingleCap,
+  two_caps: patternTwoCaps,
+  band: patternBand,
+  spots: patternSpots,
+  checker: patternChecker,
+};
+
+// ---- COLOR MAP ----
+function densityColor(val, maxAbs) {
+  if (maxAbs === 0) return [10, 10, 15, 255];
+  const norm = val / maxAbs; // [-1, 1]
+
+  // Cold (blue) → black → Hot (orange/red)
+  let r, g, b;
+  if (norm < 0) {
+    const s = Math.min(1, -norm);
+    const s2 = s * s;
+    r = Math.floor(10 + 20 * s);
+    g = Math.floor(10 + 60 * s);
+    b = Math.floor(15 + 240 * s2);
+  } else {
+    const s = Math.min(1, norm);
+    const s2 = s * s;
+    r = Math.floor(15 + 240 * s2);
+    g = Math.floor(10 + 80 * s - 40 * s2);
+    b = Math.floor(15 + 10 * s);
+  }
+  return [r, g, b, 255];
+}
+
+// ---- COMPUTE DENSITY FIELD FOR A CROSS SECTION ----
+function computeSlice(pattern, axis, sliceVal, res, encoding, tVal) {
+  // Returns a 2D array [res x res] of density values
+  // axis: 'x', 'y', 'z'
+  // sliceVal: -1 to 1
+  const patternFn = patterns[pattern];
+  const nSurf = parseInt(res);
+  const sliceSize = 200;
+
+  // Pre-sample surface points
+  const surfacePoints = [];
+  for (let it = 0; it < nSurf; it++) {
+    const theta = (it + 0.5) / nSurf * Math.PI;
+    const sinT = Math.sin(theta);
+    const cosT = Math.cos(theta);
+    const nPhiLocal = Math.max(4, Math.floor(nSurf * 2 * sinT));
+    for (let ip = 0; ip < nPhiLocal; ip++) {
+      const phi = ip / nPhiLocal * 2 * Math.PI;
+      const val = patternFn(theta, phi, tVal);
+      if (val > 0.01) {
+        // Surface point in Cartesian
+        const sx = sinT * Math.cos(phi);
+        const sy = sinT * Math.sin(phi);
+        const sz = cosT;
+        // Solid angle element
+        const dOmega = (Math.PI / nSurf) * (2 * Math.PI / nPhiLocal) * sinT;
+        surfacePoints.push({ x: sx, y: sy, z: sz, val, dOmega });
+      }
+    }
+  }
+
+  const density = new Float32Array(sliceSize * sliceSize);
+  let maxAbs = 0;
+
+  for (let j = 0; j < sliceSize; j++) {
+    for (let i = 0; i < sliceSize; i++) {
+      // Map pixel to coordinates in [-1, 1]
+      const u = (i / (sliceSize - 1)) * 2 - 1;
+      const v = (j / (sliceSize - 1)) * 2 - 1;
+
+      let px, py, pz;
+      if (axis === 'z') { px = u; py = v; pz = sliceVal; }
+      else if (axis === 'y') { px = u; py = sliceVal; pz = v; }
+      else { px = sliceVal; py = u; pz = v; }
+
+      // Check if inside sphere
+      const r2 = px * px + py * py + pz * pz;
+      if (r2 >= 1.0) {
+        density[j * sliceSize + i] = 0;
+        continue;
+      }
+
+      let sum = 0;
+      for (const sp of surfacePoints) {
+        const dx = sp.x - px;
+        const dy = sp.y - py;
+        const dz = sp.z - pz;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < 0.001) continue;
+
+        if (encoding === 'magnitude') {
+          sum += sp.val * sp.dOmega / d;
+        } else if (encoding === 'signed') {
+          // Signed: dot product with radial direction of the surface point
+          // gives dipole-like behavior
+          const dot = (sp.x * dx + sp.y * dy + sp.z * dz) / d;
+          sum += sp.val * dot * sp.dOmega / d;
+        } else if (encoding === 'inverse') {
+          sum += sp.val * sp.dOmega / (d * d);
+        }
+      }
+
+      density[j * sliceSize + i] = sum;
+      if (Math.abs(sum) > maxAbs) maxAbs = Math.abs(sum);
+    }
+  }
+
+  return { density, sliceSize, maxAbs };
+}
+
+// ---- DRAW 2D MAP ----
+function drawMap(pattern, tVal) {
+  const w = mapCanvas.width;
+  const h = mapCanvas.height;
+  const imgData = mapCtx.createImageData(w, h);
+  const patternFn = patterns[pattern];
+
+  for (let j = 0; j < h; j++) {
+    const theta = (j + 0.5) / h * Math.PI;
+    for (let i = 0; i < w; i++) {
+      const phi = (i + 0.5) / w * 2 * Math.PI;
+      const val = patternFn(theta, phi, tVal);
+      const idx = (j * w + i) * 4;
+      if (val > 0.5) {
+        imgData.data[idx] = 74;
+        imgData.data[idx + 1] = 240;
+        imgData.data[idx + 2] = 192;
+        imgData.data[idx + 3] = 200;
+      } else {
+        imgData.data[idx] = 18;
+        imgData.data[idx + 1] = 18;
+        imgData.data[idx + 2] = 30;
+        imgData.data[idx + 3] = 255;
+      }
+    }
+  }
+  mapCtx.putImageData(imgData, 0, 0);
+
+  // Grid lines
+  mapCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+  mapCtx.lineWidth = 0.5;
+  for (let i = 1; i < 8; i++) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(i * w / 8, 0);
+    mapCtx.lineTo(i * w / 8, h);
+    mapCtx.stroke();
+  }
+  for (let j = 1; j < 4; j++) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, j * h / 4);
+    mapCtx.lineTo(w, j * h / 4);
+    mapCtx.stroke();
+  }
+}
+
+// ---- DRAW LEGEND ----
+function drawLegend() {
+  const w = legendCanvas.width = legendCanvas.clientWidth * 2;
+  const h = legendCanvas.height = 28;
+  legendCtx.clearRect(0, 0, w, h);
+
+  for (let i = 0; i < w; i++) {
+    const val = (i / (w - 1)) * 2 - 1;
+    const [r, g, b] = densityColor(val, 1);
+    legendCtx.fillStyle = `rgb(${r},${g},${b})`;
+    legendCtx.fillRect(i, 0, 1, h);
+  }
+}
+
+// ---- MAIN RENDER ----
+let currentData = null;
+
+function render() {
+  const pattern = patternSelect.value;
+  const axis = sliceAxis.value;
+  const sv = parseInt(slicePos.value) / 100;
+  const res = surfRes.value;
+  const enc = encodingMode.value;
+  const t = parseInt(paramT.value) / 100 * Math.PI * 2;
+
+  slicePosVal.textContent = sv.toFixed(2);
+  surfResVal.textContent = res;
+  paramTVal.textContent = (parseInt(paramT.value) / 100).toFixed(2);
+
+  // Compute
+  const data = computeSlice(pattern, axis, sv, res, enc, t);
+  currentData = data;
+
+  // Size canvas
+  const wrap = mainCanvas.parentElement;
+  const dim = Math.min(wrap.clientWidth - 40, wrap.clientHeight - 40, 600);
+  mainCanvas.width = dim;
+  mainCanvas.height = dim;
+  mainCanvas.style.width = dim + 'px';
+  mainCanvas.style.height = dim + 'px';
+
+  // Draw density
+  const imgData = mainCtx.createImageData(data.sliceSize, data.sliceSize);
+  for (let j = 0; j < data.sliceSize; j++) {
+    for (let i = 0; i < data.sliceSize; i++) {
+      const val = data.density[j * data.sliceSize + i];
+      const [r, g, b, a] = densityColor(val, data.maxAbs);
+      const idx = (j * data.sliceSize + i) * 4;
+      imgData.data[idx] = r;
+      imgData.data[idx + 1] = g;
+      imgData.data[idx + 2] = b;
+      imgData.data[idx + 3] = a;
+    }
+  }
+
+  // Draw to offscreen then scale up
+  const offscreen = document.createElement('canvas');
+  offscreen.width = data.sliceSize;
+  offscreen.height = data.sliceSize;
+  offscreen.getContext('2d').putImageData(imgData, 0, 0);
+
+  mainCtx.imageSmoothingEnabled = true;
+  mainCtx.clearRect(0, 0, dim, dim);
+
+  // Clip to circle
+  mainCtx.save();
+  mainCtx.beginPath();
+  mainCtx.arc(dim / 2, dim / 2, dim / 2 - 2, 0, Math.PI * 2);
+  mainCtx.clip();
+  mainCtx.drawImage(offscreen, 0, 0, dim, dim);
+  mainCtx.restore();
+
+  // Draw sphere outline
+  mainCtx.strokeStyle = 'rgba(74, 240, 192, 0.3)';
+  mainCtx.lineWidth = 1.5;
+  mainCtx.beginPath();
+  mainCtx.arc(dim / 2, dim / 2, dim / 2 - 2, 0, Math.PI * 2);
+  mainCtx.stroke();
+
+  // Axis labels
+  mainCtx.fillStyle = 'rgba(200,200,212,0.5)';
+  mainCtx.font = '11px "IBM Plex Mono"';
+  mainCtx.textAlign = 'center';
+  let hLabel, vLabel;
+  if (axis === 'z') { hLabel = 'X'; vLabel = 'Y'; }
+  else if (axis === 'y') { hLabel = 'X'; vLabel = 'Z'; }
+  else { hLabel = 'Y'; vLabel = 'Z'; }
+
+  mainCtx.fillText('−' + hLabel, 14, dim / 2 + 4);
+  mainCtx.fillText('+' + hLabel, dim - 14, dim / 2 + 4);
+  mainCtx.fillText('−' + vLabel, dim / 2, 14);
+  mainCtx.fillText('+' + vLabel, dim / 2, dim - 6);
+
+  // Draw map
+  drawMap(pattern, t);
+}
+
+// ---- HOVER INFO ----
+mainCanvas.addEventListener('mousemove', (e) => {
+  if (!currentData) return;
+  const rect = mainCanvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / rect.width;
+  const my = (e.clientY - rect.top) / rect.height;
+
+  const u = mx * 2 - 1;
+  const v = my * 2 - 1;
+  const r2 = u * u + v * v;
+
+  if (r2 < 1.0) {
+    const pi = Math.floor(mx * currentData.sliceSize);
+    const pj = Math.floor(my * currentData.sliceSize);
+    if (pi >= 0 && pi < currentData.sliceSize && pj >= 0 && pj < currentData.sliceSize) {
+      const val = currentData.density[pj * currentData.sliceSize + pi];
+      infoLine.innerHTML = `Density: <span>${val.toFixed(4)}</span> | Max: <span>${currentData.maxAbs.toFixed(4)}</span>`;
+    }
+  }
+});
+
+// ---- EVENT LISTENERS ----
+let renderTimeout;
+function scheduleRender() {
+  clearTimeout(renderTimeout);
+  renderTimeout = setTimeout(render, 30);
+}
+
+patternSelect.addEventListener('change', render);
+sliceAxis.addEventListener('change', render);
+slicePos.addEventListener('input', scheduleRender);
+encodingMode.addEventListener('change', render);
+surfRes.addEventListener('input', scheduleRender);
+paramT.addEventListener('input', scheduleRender);
+
+window.addEventListener('resize', render);
+
+// ---- INIT ----
+drawLegend();
+render();
+</script>
+</body>
+</html>
