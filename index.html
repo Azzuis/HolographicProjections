@@ -3,952 +3,783 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spherical Projection Density — Multi-Layer</title>
+<title>Spherical Projection Density — 3D</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Space+Grotesk:wght@400;600&display=swap');
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  :root {
-    --bg: #0a0a0f;
-    --panel: #12121a;
-    --border: #1e1e2e;
-    --text: #c8c8d4;
-    --text-dim: #6a6a7a;
-    --accent: #4af0c0;
-  }
-  body {
-    background: var(--bg); color: var(--text);
-    font-family: 'IBM Plex Mono', monospace;
-    height: 100vh; overflow: hidden;
-    display: flex; flex-direction: column;
-  }
-  header {
-    padding: 10px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-    flex-shrink: 0;
-  }
-  header h1 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 14px; font-weight: 600;
-    letter-spacing: 0.5px; color: var(--accent);
-  }
-  header .subtitle { font-size: 10px; color: var(--text-dim); }
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--bg:#0a0a0f;--panel:#12121a;--border:#1e1e2e;--text:#c8c8d4;--text-dim:#6a6a7a;--accent:#4af0c0}
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+  header{padding:10px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;letter-spacing:.5px;color:var(--accent)}
+  header .sub{font-size:10px;color:var(--text-dim)}
+  .main{display:flex;flex:1;overflow:hidden}
+  .view{flex:1;position:relative}
+  #glCanvas{width:100%;height:100%;display:block}
+  .overlay{position:absolute;pointer-events:none}
+  .status{bottom:10px;left:10px;font-size:10px;color:var(--text-dim)}
+  .status span{color:var(--accent)}
+  .slice-hint{top:10px;left:10px;font-size:10px;color:var(--text-dim);background:rgba(10,10,15,.7);padding:4px 8px;border-radius:3px}
 
-  .main-layout { display: flex; flex: 1; overflow: hidden; }
+  .ctrl{width:250px;background:var(--panel);border-left:1px solid var(--border);padding:12px;overflow-y:auto;flex-shrink:0}
+  .ctrl h2{font-family:'Space Grotesk',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin:12px 0 6px}
+  .ctrl h2:first-child{margin-top:0}
+  .cg{margin-bottom:8px}
+  .cg label{display:block;font-size:10px;color:var(--text-dim);margin-bottom:2px}
+  .cg select,.cg input[type=range]{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:3px 5px;font-family:inherit;font-size:10px;border-radius:3px;outline:none}
+  .cg input[type=range]{-webkit-appearance:none;height:4px;border:none;border-radius:2px;background:var(--border);cursor:pointer}
+  .cg input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--accent);cursor:pointer}
+  .cg .v{font-size:10px;color:var(--accent);float:right;margin-top:-14px}
+  .pr{display:flex;gap:5px;align-items:center;margin-bottom:8px}
+  .pb{background:var(--bg);border:1px solid var(--border);color:var(--accent);font-size:12px;width:28px;height:24px;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .pb:hover{background:var(--border)}
+  .pb.on{background:var(--accent);color:var(--bg)}
+  .td{font-size:11px;color:var(--accent);font-variant-numeric:tabular-nums;flex:1;text-align:right}
+  .lt{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+  .lt div{display:flex;align-items:center;gap:5px;font-size:10px;cursor:pointer;padding:2px 0}
+  .lt div .sw{width:10px;height:10px;border-radius:2px;border:1px solid rgba(255,255,255,.15)}
+  .lt div.off .sw{opacity:.2}
+  .lt div.off{color:var(--text-dim);text-decoration:line-through}
+  .info{font-size:9px;color:var(--text-dim);margin-top:6px;line-height:1.4}
+  .info span{color:var(--accent)}
 
-  .canvas-wrap {
-    flex: 1; position: relative;
-    display: flex; align-items: center; justify-content: center;
-  }
-  #mainCanvas { background: transparent; }
-
-  /* Insets */
-  .inset {
-    position: absolute;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    border-radius: 4px; overflow: hidden;
-  }
-  .inset .label {
-    font-size: 8px; color: var(--text-dim);
-    padding: 2px 5px; background: rgba(0,0,0,0.5);
-    position: absolute; top: 0; left: 0; z-index: 2;
-    letter-spacing: 0.8px; text-transform: uppercase;
-  }
-  .map-inset { top: 12px; right: 12px; }
-  .geom-inset { top: 128px; right: 12px; }
-
-  .status-bar {
-    position: absolute; bottom: 10px; left: 10px;
-    font-size: 10px; color: var(--text-dim);
-  }
-  .status-bar span { color: var(--accent); }
-
-  /* Controls */
-  .controls {
-    width: 270px; background: var(--panel);
-    border-left: 1px solid var(--border);
-    padding: 14px; overflow-y: auto; flex-shrink: 0;
-  }
-  .controls h2 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 10px; text-transform: uppercase;
-    letter-spacing: 1.5px; color: var(--text-dim);
-    margin-bottom: 8px; margin-top: 14px;
-  }
-  .controls h2:first-child { margin-top: 0; }
-  .cg { margin-bottom: 10px; }
-  .cg label { display: block; font-size: 10px; color: var(--text-dim); margin-bottom: 3px; }
-  .cg select, .cg input[type="range"] {
-    width: 100%; background: var(--bg);
-    border: 1px solid var(--border); color: var(--text);
-    padding: 3px 5px; font-family: inherit; font-size: 10px;
-    border-radius: 3px; outline: none;
-  }
-  .cg input[type="range"] {
-    -webkit-appearance: none; height: 4px;
-    border: none; border-radius: 2px; background: var(--border); cursor: pointer;
-  }
-  .cg input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 10px; height: 10px;
-    border-radius: 50%; background: var(--accent); cursor: pointer;
-  }
-  .cg .val { font-size: 10px; color: var(--accent); float: right; margin-top: -14px; }
-
-  .play-row { display: flex; gap: 5px; align-items: center; margin-bottom: 10px; }
-  .pbtn {
-    background: var(--bg); border: 1px solid var(--border);
-    color: var(--accent); font-family: inherit; font-size: 12px;
-    width: 30px; height: 26px; border-radius: 3px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.15s;
-  }
-  .pbtn:hover { background: var(--border); }
-  .pbtn.active { background: var(--accent); color: var(--bg); }
-  .time-disp {
-    font-size: 11px; color: var(--accent);
-    font-variant-numeric: tabular-nums;
-    flex: 1; text-align: right;
-  }
-
-  /* Layer toggles */
-  .layer-toggles { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
-  .layer-tog {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 10px; cursor: pointer; padding: 3px 0;
-  }
-  .layer-tog .swatch {
-    width: 12px; height: 12px; border-radius: 2px;
-    border: 1px solid rgba(255,255,255,0.15);
-  }
-  .layer-tog.off .swatch { opacity: 0.2; }
-  .layer-tog.off { color: var(--text-dim); text-decoration: line-through; }
-
-  .legend { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
-  .legend canvas { width: 100%; height: 12px; border-radius: 2px; }
-  .legend .bounds {
-    display: flex; justify-content: space-between;
-    font-size: 8px; color: var(--text-dim); margin-top: 2px;
-  }
-  .info-line { font-size: 9px; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
-  .info-line span { color: var(--accent); }
+  .checkbox-row{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-dim);margin-bottom:6px;cursor:pointer}
+  .checkbox-row input{accent-color:var(--accent)}
 </style>
 </head>
 <body>
-
 <header>
   <div>
-    <h1>Spherical Projection Density &mdash; Multi-Layer</h1>
-    <div class="subtitle">Coupled cellular automata on a deformable sphere</div>
+    <h1>Spherical Projection Density &mdash; 3D</h1>
+    <div class="sub">Multi-layer coupled automata on a deformable sphere</div>
   </div>
 </header>
-
-<div class="main-layout">
-  <div class="canvas-wrap">
-    <canvas id="mainCanvas"></canvas>
-    <div class="inset map-inset">
-      <div class="label">Layers (equirect)</div>
-      <canvas id="mapCanvas" width="200" height="100"></canvas>
-    </div>
-    <div class="inset geom-inset">
-      <div class="label">Geometry R(&theta;,&phi;)</div>
-      <canvas id="geomCanvas" width="200" height="100"></canvas>
-    </div>
-    <div class="status-bar" id="statusBar">Gen: <span>0</span> | Cells: <span>0</span></div>
+<div class="main">
+  <div class="view">
+    <canvas id="glCanvas"></canvas>
+    <div class="overlay status" id="status">Gen: <span>0</span></div>
+    <div class="overlay slice-hint" id="sliceHint">Drag slice plane: Shift+Scroll or slider</div>
   </div>
-
-  <div class="controls">
+  <div class="ctrl" id="controls">
     <h2>Animation</h2>
-    <div class="play-row">
-      <button class="pbtn" id="playBtn" title="Play/Pause">&#9654;</button>
-      <button class="pbtn" id="stepBtn" title="Step">&#9654;|</button>
-      <button class="pbtn" id="resetBtn" title="Reset">&#8634;</button>
-      <div class="time-disp" id="timeDisp">gen 0</div>
+    <div class="pr">
+      <button class="pb" id="playBtn">&#9654;</button>
+      <button class="pb" id="stepBtn">&#9654;|</button>
+      <button class="pb" id="resetBtn">&#8634;</button>
+      <div class="td" id="genDisp">gen 0</div>
     </div>
-    <div class="cg">
-      <label>Step Delay (ms)</label>
-      <input type="range" id="delaySlider" min="0" max="500" value="100">
-      <div class="val" id="delayVal">100</div>
-    </div>
+    <div class="cg"><label>Step Delay (ms)</label><input type="range" id="delay" min="0" max="500" value="80"><div class="v" id="delayV">80</div></div>
 
     <h2>Layers</h2>
-    <div class="layer-toggles" id="layerToggles"></div>
-    <div class="cg">
-      <label>Num Layers</label>
-      <select id="numLayers">
-        <option value="2">2</option>
-        <option value="3" selected>3</option>
-        <option value="4">4</option>
-        <option value="5">5</option>
-      </select>
+    <div class="lt" id="layerToggles"></div>
+    <div class="cg"><label>Num Layers</label>
+      <select id="numLayers"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select>
     </div>
-    <div class="cg">
-      <label>Init Density</label>
-      <input type="range" id="initDensity" min="10" max="60" value="30">
-      <div class="val" id="initDensVal">30%</div>
-    </div>
+    <div class="cg"><label>Init Density</label><input type="range" id="initDens" min="10" max="60" value="30"><div class="v" id="initDensV">30%</div></div>
 
     <h2>Rules</h2>
-    <div class="cg">
-      <label>Survive (neighbors)</label>
-      <select id="surviveRule">
-        <option value="2,3" selected>2-3 (classic)</option>
-        <option value="2,3,4">2-3-4 (permissive)</option>
-        <option value="3,4">3-4 (tight)</option>
-      </select>
+    <div class="cg"><label>Survive</label>
+      <select id="surviveRule"><option value="2,3" selected>2-3</option><option value="2,3,4">2-3-4</option><option value="3,4">3-4</option></select>
     </div>
-    <div class="cg">
-      <label>Birth (neighbors)</label>
-      <select id="birthRule">
-        <option value="3" selected>3 (classic)</option>
-        <option value="2,3">2-3 (expansive)</option>
-        <option value="3,4">3-4 (slow)</option>
-      </select>
+    <div class="cg"><label>Birth</label>
+      <select id="birthRule"><option value="3" selected>3</option><option value="2,3">2-3</option><option value="3,4">3-4</option></select>
     </div>
-    <div class="cg">
-      <label>Density Coupling Strength</label>
-      <input type="range" id="couplingStr" min="0" max="100" value="40">
-      <div class="val" id="couplingVal">0.40</div>
-    </div>
-    <div class="cg">
-      <label>Density Kill Threshold</label>
-      <input type="range" id="killThresh" min="0" max="100" value="70">
-      <div class="val" id="killVal">0.70</div>
-    </div>
+    <div class="cg"><label>Coupling Strength</label><input type="range" id="coupling" min="0" max="100" value="40"><div class="v" id="couplingV">0.40</div></div>
+    <div class="cg"><label>Kill Threshold</label><input type="range" id="killTh" min="0" max="100" value="70"><div class="v" id="killThV">0.70</div></div>
 
     <h2>Geometry</h2>
-    <div class="cg">
-      <label>Deformation Strength</label>
-      <input type="range" id="deformStr" min="0" max="100" value="30">
-      <div class="val" id="deformVal">0.30</div>
-    </div>
-    <div class="cg">
-      <label>Geometry Smoothing</label>
-      <input type="range" id="geomSmooth" min="1" max="10" value="3">
-      <div class="val" id="geomSmoothVal">3</div>
-    </div>
+    <div class="cg"><label>Deformation Strength</label><input type="range" id="deformStr" min="0" max="100" value="30"><div class="v" id="deformStrV">0.30</div></div>
+    <div class="cg"><label>Smoothing Passes</label><input type="range" id="geomSmooth" min="1" max="10" value="3"><div class="v" id="geomSmoothV">3</div></div>
 
-    <h2>Cross Section</h2>
-    <div class="cg">
-      <label>Slice Axis</label>
-      <select id="sliceAxis">
-        <option value="z">XY plane (Z slice)</option>
-        <option value="y">XZ plane (Y slice)</option>
-        <option value="x">YZ plane (X slice)</option>
-      </select>
+    <h2>Slice Plane</h2>
+    <label class="checkbox-row"><input type="checkbox" id="showSlice" checked> Show slice plane</label>
+    <div class="cg"><label>Axis</label>
+      <select id="sliceAxis"><option value="z">XY (Z slice)</option><option value="y">XZ (Y slice)</option><option value="x">YZ (X slice)</option></select>
     </div>
-    <div class="cg">
-      <label>Slice Position</label>
-      <input type="range" id="slicePos" min="-100" max="100" value="0">
-      <div class="val" id="slicePosVal">0.00</div>
-    </div>
-    <div class="cg">
-      <label>Encoding</label>
-      <select id="encodingMode">
-        <option value="signed" selected>Signed (dipole)</option>
-        <option value="magnitude">Magnitude</option>
-        <option value="inverse">Inverse (1/d&sup2;)</option>
-      </select>
-    </div>
-    <div class="cg">
-      <label>Surface Resolution</label>
-      <input type="range" id="surfRes" min="16" max="60" value="30">
-      <div class="val" id="surfResVal">30</div>
-    </div>
+    <div class="cg"><label>Position</label><input type="range" id="slicePos" min="-100" max="100" value="0"><div class="v" id="slicePosV">0.00</div></div>
 
-    <div class="legend">
-      <canvas id="legendCanvas" height="12"></canvas>
-      <div class="bounds"><span>&minus;max</span><span>0</span><span>+max</span></div>
-    </div>
-    <div class="info-line" id="infoLine">Hover for density</div>
+    <h2>Rendering</h2>
+    <label class="checkbox-row"><input type="checkbox" id="showWire"> Wireframe overlay</label>
+    <label class="checkbox-row"><input type="checkbox" id="autoRotate"> Auto-rotate</label>
+    <div class="info" id="info">Click & drag to orbit. Scroll to zoom.</div>
   </div>
 </div>
 
 <script>
 // ============================================================
-// CONFIG
+// CONSTANTS
 // ============================================================
-const GRID_THETA = 60;   // latitude cells
-const GRID_PHI   = 120;  // longitude cells
+const GT = 50, GP = 100; // grid theta, phi (reduced for perf)
+const NCELLS = GT * GP;
 const R0 = 1.0;
-const LAYER_COLORS = [
-  [74, 240, 192],   // teal
-  [240, 74, 138],   // pink
-  [100, 140, 255],  // blue
-  [255, 200, 60],   // gold
-  [180, 120, 255],  // purple
-];
-const LAYER_WEIGHTS = [1.0, -0.8, 0.6, -0.5, 0.4]; // signed weights for density
+const COLORS = [[74,240,192],[240,74,138],[100,140,255],[255,200,60],[180,120,255]];
+const WEIGHTS = [1.0, -0.8, 0.6, -0.5, 0.4];
+
+// ============================================================
+// PRE-COMPUTED NEIGHBOR TABLE
+// ============================================================
+const NEIGHBORS = new Int32Array(NCELLS * 6);
+(function buildNeighbors() {
+  for (let j = 0; j < GT; j++) {
+    for (let i = 0; i < GP; i++) {
+      const idx = j * GP + i;
+      const base = idx * 6;
+      const jp = j > 0 ? j-1 : GT-1;
+      const jn = j < GT-1 ? j+1 : 0;
+      const ip = (i-1+GP)%GP;
+      const in_ = (i+1)%GP;
+      NEIGHBORS[base]   = jp*GP+i;
+      NEIGHBORS[base+1] = jn*GP+i;
+      NEIGHBORS[base+2] = j*GP+ip;
+      NEIGHBORS[base+3] = j*GP+in_;
+      NEIGHBORS[base+4] = jp*GP+in_;
+      NEIGHBORS[base+5] = jn*GP+ip;
+    }
+  }
+})();
+
+// Pre-compute theta/phi values
+const THETA = new Float32Array(GT);
+const SIN_T = new Float32Array(GT);
+const COS_T = new Float32Array(GT);
+const PHI = new Float32Array(GP);
+const SIN_P = new Float32Array(GP);
+const COS_P = new Float32Array(GP);
+for (let j = 0; j < GT; j++) {
+  THETA[j] = (j+0.5)/GT*Math.PI;
+  SIN_T[j] = Math.sin(THETA[j]);
+  COS_T[j] = Math.cos(THETA[j]);
+}
+for (let i = 0; i < GP; i++) {
+  PHI[i] = (i+0.5)/GP*2*Math.PI;
+  SIN_P[i] = Math.sin(PHI[i]);
+  COS_P[i] = Math.cos(PHI[i]);
+}
+
+// Pre-compute coarse influence: which cells each cell is influenced by
+// Downsample to COARSE_STEP for O(N * N/step^2) instead of O(N^2)
+const COARSE = 4;
+const coarseIndices = [];
+for (let jj = 0; jj < GT; jj += COARSE) {
+  for (let ii = 0; ii < GP; ii += COARSE) {
+    coarseIndices.push(jj * GP + ii);
+  }
+}
+
+// Pre-compute cosAngle between all cells and coarse cells
+const NUM_COARSE = coarseIndices.length;
+const COS_ANG = new Float32Array(NCELLS * NUM_COARSE);
+for (let idx = 0; idx < NCELLS; idx++) {
+  const j1 = (idx / GP) | 0, i1 = idx % GP;
+  for (let c = 0; c < NUM_COARSE; c++) {
+    const idx2 = coarseIndices[c];
+    const j2 = (idx2 / GP) | 0, i2 = idx2 % GP;
+    COS_ANG[idx * NUM_COARSE + c] = COS_T[j1]*COS_T[j2] + SIN_T[j1]*SIN_T[j2]*(COS_P[i1]*COS_P[i2] + SIN_P[i1]*SIN_P[i2]);
+  }
+}
 
 // ============================================================
 // STATE
 // ============================================================
 let numLayers = 3;
-let layers = [];        // layers[k][j * GRID_PHI + i] = 0 or 1
-let radius = null;      // radius[j * GRID_PHI + i] = R(theta, phi)
+let layers = [];
+let radius = new Float32Array(NCELLS);
 let generation = 0;
 let playing = false;
 let playTimer = null;
 let layerVisible = [];
-let currentSliceData = null;
-
-// ============================================================
-// GRID HELPERS
-// ============================================================
-function thetaOf(j) { return (j + 0.5) / GRID_THETA * Math.PI; }
-function phiOf(i) { return (i + 0.5) / GRID_PHI * 2 * Math.PI; }
-
-function sphereToCart(theta, phi, r) {
-  const st = Math.sin(theta);
-  return [r * st * Math.cos(phi), r * st * Math.sin(phi), r * Math.cos(theta)];
-}
-
-// Get 6 neighbors on spherical grid (hex-ish)
-function getNeighbors(j, i) {
-  const n = [];
-  const jp = j > 0 ? j - 1 : GRID_THETA - 1;
-  const jn = j < GRID_THETA - 1 ? j + 1 : 0;
-  const ip = (i - 1 + GRID_PHI) % GRID_PHI;
-  const in_ = (i + 1) % GRID_PHI;
-  // 4 cardinal
-  n.push(jp * GRID_PHI + i);
-  n.push(jn * GRID_PHI + i);
-  n.push(j * GRID_PHI + ip);
-  n.push(j * GRID_PHI + in_);
-  // 2 diagonal (offset for hex feel)
-  n.push(jp * GRID_PHI + in_);
-  n.push(jn * GRID_PHI + ip);
-  return n;
-}
 
 // ============================================================
 // INIT
 // ============================================================
 function initLayers() {
-  const density = parseInt(document.getElementById('initDensity').value) / 100;
+  const dens = parseInt(document.getElementById('initDens').value) / 100;
   numLayers = parseInt(document.getElementById('numLayers').value);
   layers = [];
   for (let k = 0; k < numLayers; k++) {
-    const layer = new Uint8Array(GRID_THETA * GRID_PHI);
-    for (let idx = 0; idx < layer.length; idx++) {
-      layer[idx] = Math.random() < density ? 1 : 0;
-    }
-    layers.push(layer);
+    const l = new Uint8Array(NCELLS);
+    for (let idx = 0; idx < NCELLS; idx++) l[idx] = Math.random() < dens ? 1 : 0;
+    layers.push(l);
   }
-  radius = new Float32Array(GRID_THETA * GRID_PHI);
   radius.fill(R0);
   generation = 0;
-  layerVisible = [];
-  for (let k = 0; k < numLayers; k++) layerVisible.push(true);
-  buildLayerToggles();
+  layerVisible = Array(numLayers).fill(true);
+  buildToggles();
   updateStatus();
 }
 
 // ============================================================
-// EVOLUTION
+// EVOLUTION (optimized)
 // ============================================================
-function parseRule(str) { return str.split(',').map(Number); }
-
 function step() {
-  const surviveSet = new Set(parseRule(document.getElementById('surviveRule').value));
-  const birthSet = new Set(parseRule(document.getElementById('birthRule').value));
-  const coupling = parseInt(document.getElementById('couplingStr').value) / 100;
-  const killThresh = parseInt(document.getElementById('killThresh').value) / 100;
+  const surviveSet = new Set(document.getElementById('surviveRule').value.split(',').map(Number));
+  const birthSet = new Set(document.getElementById('birthRule').value.split(',').map(Number));
+  const coupling = parseInt(document.getElementById('coupling').value) / 100;
+  const killThresh = parseInt(document.getElementById('killTh').value) / 100;
 
-  // 1. Compute combined activity per cell (sum of all layers)
-  const activity = new Float32Array(GRID_THETA * GRID_PHI);
+  // 1. Compute combined activity (used for geometry)
+  const activity = new Float32Array(NCELLS);
   for (let k = 0; k < numLayers; k++) {
-    for (let idx = 0; idx < activity.length; idx++) {
-      activity[idx] += layers[k][idx];
-    }
+    const l = layers[k];
+    for (let idx = 0; idx < NCELLS; idx++) activity[idx] += l[idx];
   }
 
-  // 2. Compute cross-layer density influence per cell per layer
-  //    Simplified: instead of full volumetric projection (too expensive per step),
-  //    we use a spherical convolution — each cell is influenced by a weighted
-  //    sum of other-layer cells, weighted by angular proximity and radius.
-  //    This captures the "projection through interior" effect efficiently.
-  const crossInfluence = [];
+  // 2. Coarse activity per layer at coarse points
+  const coarseActivity = [];
   for (let k = 0; k < numLayers; k++) {
-    crossInfluence.push(new Float32Array(GRID_THETA * GRID_PHI));
-  }
-
-  // For each cell, accumulate influence from other layers within angular window
-  // Use a coarse pass for performance
-  const SAMPLE_STEP = 3;
-  for (let k = 0; k < numLayers; k++) {
-    for (let j = 0; j < GRID_THETA; j++) {
-      const theta1 = thetaOf(j);
-      const cosT1 = Math.cos(theta1), sinT1 = Math.sin(theta1);
-      for (let i = 0; i < GRID_PHI; i++) {
-        const phi1 = phiOf(i);
-        const idx1 = j * GRID_PHI + i;
-        const r1 = radius[idx1];
-
-        let inf = 0;
-        for (let kk = 0; kk < numLayers; kk++) {
-          if (kk === k) continue;
-          const w = LAYER_WEIGHTS[kk] || 0.5;
-          for (let jj = 0; jj < GRID_THETA; jj += SAMPLE_STEP) {
-            const theta2 = thetaOf(jj);
-            const cosT2 = Math.cos(theta2), sinT2 = Math.sin(theta2);
-            for (let ii = 0; ii < GRID_PHI; ii += SAMPLE_STEP) {
-              if (!layers[kk][jj * GRID_PHI + ii]) continue;
-              const phi2 = phiOf(ii);
-              const r2 = radius[jj * GRID_PHI + ii];
-              // Angular distance (great circle)
-              const cosAng = cosT1 * cosT2 + sinT1 * sinT2 * Math.cos(phi1 - phi2);
-              // Effective 3D distance through interior
-              const d = Math.sqrt(r1*r1 + r2*r2 - 2*r1*r2*cosAng);
-              if (d < 0.01) continue;
-              // Signed contribution: positive if same hemisphere, negative if opposite
-              inf += w * cosAng / (d + 0.1);
-            }
-          }
+    const ca = new Float32Array(NUM_COARSE);
+    const l = layers[k];
+    for (let c = 0; c < NUM_COARSE; c++) {
+      // Sum a small patch around coarse point
+      const cidx = coarseIndices[c];
+      const cj = (cidx / GP) | 0, ci = cidx % GP;
+      let sum = 0;
+      for (let dj = 0; dj < COARSE && cj+dj < GT; dj++) {
+        for (let di = 0; di < COARSE; di++) {
+          sum += l[(cj+dj)*GP + (ci+di)%GP];
         }
-        crossInfluence[k][idx1] = inf;
       }
+      ca[c] = sum;
     }
+    coarseActivity.push(ca);
   }
 
-  // Normalize cross influence per layer
+  // 3. Cross-layer influence using pre-computed cosAngle table
+  const crossInf = [];
+  for (let k = 0; k < numLayers; k++) crossInf.push(new Float32Array(NCELLS));
+
   for (let k = 0; k < numLayers; k++) {
-    let maxCI = 0;
-    for (let idx = 0; idx < crossInfluence[k].length; idx++) {
-      const a = Math.abs(crossInfluence[k][idx]);
-      if (a > maxCI) maxCI = a;
-    }
-    if (maxCI > 0) {
-      for (let idx = 0; idx < crossInfluence[k].length; idx++) {
-        crossInfluence[k][idx] /= maxCI;
+    const ci = crossInf[k];
+    for (let idx = 0; idx < NCELLS; idx++) {
+      const r1 = radius[idx];
+      const angBase = idx * NUM_COARSE;
+      let inf = 0;
+      for (let kk = 0; kk < numLayers; kk++) {
+        if (kk === k) continue;
+        const w = WEIGHTS[kk] || 0.5;
+        const ca = coarseActivity[kk];
+        for (let c = 0; c < NUM_COARSE; c++) {
+          if (ca[c] === 0) continue;
+          const cosA = COS_ANG[angBase + c];
+          const r2 = radius[coarseIndices[c]];
+          const d = Math.sqrt(r1*r1 + r2*r2 - 2*r1*r2*cosA);
+          if (d < 0.01) continue;
+          inf += w * ca[c] * cosA / (d + 0.1);
+        }
       }
+      ci[idx] = inf;
+    }
+
+    // Normalize
+    let mx = 0;
+    for (let idx = 0; idx < NCELLS; idx++) {
+      const a = ci[idx] < 0 ? -ci[idx] : ci[idx];
+      if (a > mx) mx = a;
+    }
+    if (mx > 0) {
+      const inv = 1 / mx;
+      for (let idx = 0; idx < NCELLS; idx++) ci[idx] *= inv;
     }
   }
 
-  // 3. Apply rules
+  // 4. Apply rules
   const newLayers = [];
   for (let k = 0; k < numLayers; k++) {
-    const newLayer = new Uint8Array(GRID_THETA * GRID_PHI);
-    for (let j = 0; j < GRID_THETA; j++) {
-      for (let i = 0; i < GRID_PHI; i++) {
-        const idx = j * GRID_PHI + i;
-        const alive = layers[k][idx];
+    const nl = new Uint8Array(NCELLS);
+    const ol = layers[k];
+    const ci = crossInf[k];
+    for (let idx = 0; idx < NCELLS; idx++) {
+      const alive = ol[idx];
+      // Count neighbors from pre-computed table
+      const nb = idx * 6;
+      let count = ol[NEIGHBORS[nb]] + ol[NEIGHBORS[nb+1]] + ol[NEIGHBORS[nb+2]]
+                + ol[NEIGHBORS[nb+3]] + ol[NEIGHBORS[nb+4]] + ol[NEIGHBORS[nb+5]];
 
-        // Count same-layer neighbors
-        const nbrs = getNeighbors(j, i);
-        let count = 0;
-        for (const n of nbrs) count += layers[k][n];
+      const ciVal = ci[idx] * coupling;
+      const pressure = ciVal < 0 ? -ciVal : ciVal;
 
-        // Cross-layer influence modifies survival
-        const ci = crossInfluence[k][idx] * coupling;
-        const densityPressure = Math.abs(ci);
+      let lives;
+      if (alive) { lives = surviveSet.has(count); }
+      else { lives = birthSet.has(count); }
 
-        // Base GoL rule
-        let survives = false;
-        if (alive) {
-          survives = surviveSet.has(count);
-        } else {
-          survives = birthSet.has(count);
-        }
+      if (lives && pressure > killThresh && ciVal < 0) lives = false;
+      if (!alive && !lives && ciVal > 0.2 * coupling && count >= 2) lives = true;
 
-        // Density coupling: kill if cross-layer pressure too high
-        if (survives && densityPressure > killThresh) {
-          // High opposing density kills; high supporting density can help
-          if (ci < 0) survives = false; // opposing layers suppress
-        }
-
-        // Density coupling: boost birth if moderate positive influence
-        if (!alive && !survives && ci > 0.2 * coupling && count >= 2) {
-          survives = true; // cross-layer support helps birth
-        }
-
-        newLayer[idx] = survives ? 1 : 0;
-      }
+      nl[idx] = lives ? 1 : 0;
     }
-    newLayers.push(newLayer);
+    newLayers.push(nl);
   }
-
   layers = newLayers;
 
-  // 4. Update geometry
+  // 5. Update geometry
   updateGeometry(activity);
-
   generation++;
   updateStatus();
 }
 
 // ============================================================
-// GEOMETRY DEFORMATION
+// GEOMETRY
 // ============================================================
 function updateGeometry(activity) {
   const strength = parseInt(document.getElementById('deformStr').value) / 100;
   const smoothPasses = parseInt(document.getElementById('geomSmooth').value);
+  if (strength < 0.001) { radius.fill(R0); return; }
 
-  if (strength < 0.001) {
-    radius.fill(R0);
-    return;
-  }
-
-  // Recompute current activity
-  const act = activity || new Float32Array(GRID_THETA * GRID_PHI);
+  const act = activity || new Float32Array(NCELLS);
   if (!activity) {
     for (let k = 0; k < numLayers; k++) {
-      for (let idx = 0; idx < act.length; idx++) act[idx] += layers[k][idx];
+      const l = layers[k];
+      for (let idx = 0; idx < NCELLS; idx++) act[idx] += l[idx];
     }
   }
 
-  // Max activity = numLayers
-  const maxAct = numLayers;
-
-  // Raw displacement: high activity → concave (negative), low → convex (positive)
-  const disp = new Float32Array(GRID_THETA * GRID_PHI);
-  for (let idx = 0; idx < disp.length; idx++) {
-    const norm = act[idx] / maxAct; // 0 to 1
-    disp[idx] = (0.5 - norm) * strength * 0.3; // centered, scaled
+  const invMax = 1 / numLayers;
+  // Displacement buffer
+  let buf = new Float32Array(NCELLS);
+  for (let idx = 0; idx < NCELLS; idx++) {
+    buf[idx] = (0.5 - act[idx] * invMax) * strength * 0.3;
   }
 
-  // Smooth the displacement field
-  let buf = disp;
+  // Smooth using pre-computed neighbors
   for (let pass = 0; pass < smoothPasses; pass++) {
-    const smoothed = new Float32Array(buf.length);
-    for (let j = 0; j < GRID_THETA; j++) {
-      for (let i = 0; i < GRID_PHI; i++) {
-        const idx = j * GRID_PHI + i;
-        const nbrs = getNeighbors(j, i);
-        let sum = buf[idx] * 2;
-        for (const n of nbrs) sum += buf[n];
-        smoothed[idx] = sum / (2 + nbrs.length);
-      }
+    const out = new Float32Array(NCELLS);
+    for (let idx = 0; idx < NCELLS; idx++) {
+      const nb = idx * 6;
+      out[idx] = (buf[idx] * 2 + buf[NEIGHBORS[nb]] + buf[NEIGHBORS[nb+1]]
+        + buf[NEIGHBORS[nb+2]] + buf[NEIGHBORS[nb+3]]
+        + buf[NEIGHBORS[nb+4]] + buf[NEIGHBORS[nb+5]]) / 8;
     }
-    buf = smoothed;
+    buf = out;
   }
 
-  // Apply displacement and enforce constant surface area
-  // Surface area element: dA = R^2 sin(theta) dtheta dphi
-  // We want sum(R_i^2 * sin(theta_i)) = sum(R0^2 * sin(theta_i))
-  for (let idx = 0; idx < radius.length; idx++) {
-    radius[idx] = R0 + buf[idx];
-  }
-
-  // Compute current surface area
-  let saOriginal = 0, saCurrent = 0;
-  const dTheta = Math.PI / GRID_THETA;
-  const dPhi = 2 * Math.PI / GRID_PHI;
-  for (let j = 0; j < GRID_THETA; j++) {
-    const sinT = Math.sin(thetaOf(j));
-    for (let i = 0; i < GRID_PHI; i++) {
-      const idx = j * GRID_PHI + i;
-      saOriginal += R0 * R0 * sinT;
-      saCurrent += radius[idx] * radius[idx] * sinT;
+  // Apply and normalize surface area
+  const dTheta = Math.PI / GT;
+  const dPhi = 2 * Math.PI / GP;
+  let saOrig = 0, saCur = 0;
+  for (let j = 0; j < GT; j++) {
+    const sT = SIN_T[j];
+    for (let i = 0; i < GP; i++) {
+      const idx = j * GP + i;
+      radius[idx] = R0 + buf[idx];
+      saOrig += R0 * R0 * sT;
+      saCur += radius[idx] * radius[idx] * sT;
     }
   }
-
-  // Rescale radii to preserve surface area
-  const scale = Math.sqrt(saOriginal / saCurrent);
-  for (let idx = 0; idx < radius.length; idx++) {
-    radius[idx] *= scale;
-  }
+  const scale = Math.sqrt(saOrig / saCur);
+  for (let idx = 0; idx < NCELLS; idx++) radius[idx] *= scale;
 }
 
 // ============================================================
-// DENSITY SLICE COMPUTATION (main thread, single slice only)
+// WEBGL RENDERER
 // ============================================================
-function computeSlice() {
-  const axis = document.getElementById('sliceAxis').value;
-  const sliceVal = parseInt(document.getElementById('slicePos').value) / 100;
-  const encoding = document.getElementById('encodingMode').value;
-  const nSurf = parseInt(document.getElementById('surfRes').value);
-  const sliceSize = 150;
+const canvas = document.getElementById('glCanvas');
+const gl = canvas.getContext('webgl', { antialias: true, alpha: false });
 
-  // Collect all surface points from visible layers
-  const surfPts = []; // [x, y, z, weight, dOmega]
-  for (let k = 0; k < numLayers; k++) {
-    if (!layerVisible[k]) continue;
-    const w = LAYER_WEIGHTS[k] || 0.5;
-    for (let jj = 0; jj < nSurf; jj++) {
-      const j = Math.floor(jj / nSurf * GRID_THETA);
-      const theta = thetaOf(j);
-      const sinT = Math.sin(theta);
-      const nPhiL = Math.max(4, Math.floor(nSurf * 2 * sinT));
-      for (let ii = 0; ii < nPhiL; ii++) {
-        const i = Math.floor(ii / nPhiL * GRID_PHI);
-        const idx = j * GRID_PHI + i;
-        if (!layers[k][idx]) continue;
-        const phi = phiOf(i);
-        const r = radius[idx];
-        const [sx, sy, sz] = sphereToCart(theta, phi, r);
-        const dOmega = (Math.PI / nSurf) * (2 * Math.PI / nPhiL) * sinT;
-        surfPts.push(sx, sy, sz, w, dOmega);
-      }
+// Resize
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  canvas.width = r.width * devicePixelRatio;
+  canvas.height = r.height * devicePixelRatio;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Shaders
+const vsrc = `
+attribute vec3 aPos;
+attribute vec3 aColor;
+attribute vec3 aNormal;
+uniform mat4 uMVP;
+uniform mat4 uModel;
+varying vec3 vColor;
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+void main() {
+  gl_Position = uMVP * vec4(aPos, 1.0);
+  vColor = aColor;
+  vNormal = mat3(uModel) * aNormal;
+  vWorldPos = (uModel * vec4(aPos, 1.0)).xyz;
+}`;
+
+const fsrc = `
+precision mediump float;
+varying vec3 vColor;
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+uniform vec3 uLightDir;
+uniform float uSlicePos;
+uniform int uSliceAxis; // 0=x, 1=y, 2=z
+uniform int uShowSlice;
+void main() {
+  vec3 n = normalize(vNormal);
+  float diff = max(dot(n, uLightDir), 0.0) * 0.7 + 0.3;
+  vec3 col = vColor * diff;
+
+  // Slice plane highlight
+  if (uShowSlice == 1) {
+    float sliceCoord;
+    if (uSliceAxis == 0) sliceCoord = vWorldPos.x;
+    else if (uSliceAxis == 1) sliceCoord = vWorldPos.y;
+    else sliceCoord = vWorldPos.z;
+    float dist = abs(sliceCoord - uSlicePos);
+    if (dist < 0.015) {
+      col = mix(col, vec3(1.0, 1.0, 1.0), 0.7);
+    } else if (dist < 0.04) {
+      col = mix(col, vec3(0.29, 0.94, 0.75), 0.3);
     }
   }
 
-  const nPts = surfPts.length / 5;
-  const density = new Float32Array(sliceSize * sliceSize);
-  let maxAbs = 0;
+  gl_FragColor = vec4(col, 1.0);
+}`;
 
-  for (let pj = 0; pj < sliceSize; pj++) {
-    for (let pi = 0; pi < sliceSize; pi++) {
-      const u = (pi / (sliceSize - 1)) * 2 - 1;
-      const v = (pj / (sliceSize - 1)) * 2 - 1;
-      let px, py, pz;
-      if (axis === 'z') { px = u; py = v; pz = sliceVal; }
-      else if (axis === 'y') { px = u; py = sliceVal; pz = v; }
-      else { px = sliceVal; py = u; pz = v; }
+function compileShader(src, type) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+  return s;
+}
 
-      // Check rough bounds (max deformed radius ~ 1.3)
-      if (px*px + py*py + pz*pz >= 1.8) continue;
+const prog = gl.createProgram();
+gl.attachShader(prog, compileShader(vsrc, gl.VERTEX_SHADER));
+gl.attachShader(prog, compileShader(fsrc, gl.FRAGMENT_SHADER));
+gl.linkProgram(prog);
+gl.useProgram(prog);
 
-      let sum = 0;
-      for (let n = 0; n < nPts; n++) {
-        const b = n * 5;
-        const dx = surfPts[b] - px, dy = surfPts[b+1] - py, dz = surfPts[b+2] - pz;
-        const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
-        if (d < 0.01) continue;
-        const wt = surfPts[b+3] * surfPts[b+4];
-        if (encoding === 'magnitude') sum += Math.abs(wt) / d;
-        else if (encoding === 'signed') sum += wt * (surfPts[b]*dx + surfPts[b+1]*dy + surfPts[b+2]*dz) / (d*d);
-        else sum += wt / (d*d);
-      }
-      density[pj * sliceSize + pi] = sum;
-      const a = sum < 0 ? -sum : sum;
-      if (a > maxAbs) maxAbs = a;
+const aPos = gl.getAttribLocation(prog, 'aPos');
+const aColor = gl.getAttribLocation(prog, 'aColor');
+const aNormal = gl.getAttribLocation(prog, 'aNormal');
+const uMVP = gl.getUniformLocation(prog, 'uMVP');
+const uModel = gl.getUniformLocation(prog, 'uModel');
+const uLightDir = gl.getUniformLocation(prog, 'uLightDir');
+const uSlicePos = gl.getUniformLocation(prog, 'uSlicePos');
+const uSliceAxis = gl.getUniformLocation(prog, 'uSliceAxis');
+const uShowSlice = gl.getUniformLocation(prog, 'uShowSlice');
+
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0.039, 0.039, 0.059, 1);
+
+// Buffers
+const posBuf = gl.createBuffer();
+const colBuf = gl.createBuffer();
+const normBuf = gl.createBuffer();
+const idxBuf = gl.createBuffer();
+
+// Build index buffer (triangles for sphere mesh — doesn't change)
+const indices = [];
+for (let j = 0; j < GT - 1; j++) {
+  for (let i = 0; i < GP; i++) {
+    const a = j * GP + i;
+    const b = j * GP + (i+1) % GP;
+    const c = (j+1) * GP + i;
+    const d = (j+1) * GP + (i+1) % GP;
+    indices.push(a, b, c);
+    indices.push(b, d, c);
+  }
+}
+// Cap top and bottom
+// (poles are handled by the wrap in GT)
+const idxArr = new Uint32Array(indices);
+const ext = gl.getExtension('OES_element_index_uint');
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxArr, gl.STATIC_DRAW);
+const numIndices = idxArr.length;
+
+// Reusable typed arrays for dynamic data
+const posData = new Float32Array(NCELLS * 3);
+const colData = new Float32Array(NCELLS * 3);
+const normData = new Float32Array(NCELLS * 3);
+
+function updateMesh() {
+  // Positions
+  for (let j = 0; j < GT; j++) {
+    for (let i = 0; i < GP; i++) {
+      const idx = j * GP + i;
+      const r = radius[idx];
+      const b3 = idx * 3;
+      posData[b3]   = r * SIN_T[j] * COS_P[i];
+      posData[b3+1] = r * SIN_T[j] * SIN_P[i];
+      posData[b3+2] = r * COS_T[j];
     }
   }
 
-  currentSliceData = { density, sliceSize, maxAbs };
+  // Colors — blend visible layers
+  for (let idx = 0; idx < NCELLS; idx++) {
+    let cr = 0.055, cg = 0.055, cb = 0.086; // dark base
+    let any = false;
+    for (let k = 0; k < numLayers; k++) {
+      if (!layerVisible[k]) continue;
+      if (layers[k][idx]) {
+        const c = COLORS[k % COLORS.length];
+        cr += c[0] / 255 * 0.55;
+        cg += c[1] / 255 * 0.55;
+        cb += c[2] / 255 * 0.55;
+        any = true;
+      }
+    }
+    if (!any) {
+      // Slight deformation tint even on empty cells
+      const rr = radius[idx];
+      const deformTint = (rr - R0) * 2;
+      cr += deformTint * 0.1;
+      cb -= deformTint * 0.1;
+    }
+    const b3 = idx * 3;
+    colData[b3] = Math.min(1, cr);
+    colData[b3+1] = Math.min(1, cg);
+    colData[b3+2] = Math.min(1, cb);
+  }
+
+  // Normals (approximate via cross product of tangent vectors)
+  for (let j = 0; j < GT; j++) {
+    for (let i = 0; i < GP; i++) {
+      const idx = j * GP + i;
+      const b3 = idx * 3;
+      // Use neighbors for tangent approximation
+      const jp = j > 0 ? j-1 : j;
+      const jn = j < GT-1 ? j+1 : j;
+      const ip = (i-1+GP)%GP;
+      const in_ = (i+1)%GP;
+      const t1 = (jn*GP+i)*3, t2 = (jp*GP+i)*3;
+      const t3 = (j*GP+in_)*3, t4 = (j*GP+ip)*3;
+      // Tangent dtheta
+      const dtx = posData[t1]-posData[t2], dty = posData[t1+1]-posData[t2+1], dtz = posData[t1+2]-posData[t2+2];
+      // Tangent dphi
+      const dpx = posData[t3]-posData[t4], dpy = posData[t3+1]-posData[t4+1], dpz = posData[t3+2]-posData[t4+2];
+      // Cross product
+      let nx = dty*dpz - dtz*dpy;
+      let ny = dtz*dpx - dtx*dpz;
+      let nz = dtx*dpy - dty*dpx;
+      const len = Math.sqrt(nx*nx+ny*ny+nz*nz) || 1;
+      normData[b3] = nx/len;
+      normData[b3+1] = ny/len;
+      normData[b3+2] = nz/len;
+    }
+  }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, posData, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, colData, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, normData, gl.DYNAMIC_DRAW);
 }
 
 // ============================================================
-// DRAWING
+// CAMERA
 // ============================================================
-const mainCanvas = document.getElementById('mainCanvas');
-const mainCtx = mainCanvas.getContext('2d');
-const mapCanvas = document.getElementById('mapCanvas');
-const mapCtx = mapCanvas.getContext('2d');
-const geomCanvas = document.getElementById('geomCanvas');
-const geomCtx = geomCanvas.getContext('2d');
-const legendCanvas = document.getElementById('legendCanvas');
-const legendCtx = legendCanvas.getContext('2d');
+let camYaw = 0.4, camPitch = 0.3, camDist = 2.8;
+let dragging = false, lastMX = 0, lastMY = 0;
 
-function densityColor(val, maxAbs) {
-  if (maxAbs === 0) return [10, 10, 15, 255];
-  const norm = val / maxAbs;
-  let r, g, b;
-  if (norm < 0) {
-    const s = Math.min(1, -norm), s2 = s * s;
-    r = 10 + 20*s | 0; g = 10 + 60*s | 0; b = 15 + 240*s2 | 0;
+canvas.addEventListener('mousedown', e => { dragging = true; lastMX = e.clientX; lastMY = e.clientY; });
+window.addEventListener('mouseup', () => dragging = false);
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  camYaw += (e.clientX - lastMX) * 0.006;
+  camPitch += (e.clientY - lastMY) * 0.006;
+  camPitch = Math.max(-1.5, Math.min(1.5, camPitch));
+  lastMX = e.clientX; lastMY = e.clientY;
+});
+canvas.addEventListener('wheel', e => {
+  if (e.shiftKey) {
+    // Shift+scroll moves slice
+    const sl = document.getElementById('slicePos');
+    sl.value = Math.max(-100, Math.min(100, parseInt(sl.value) + (e.deltaY > 0 ? 5 : -5)));
+    document.getElementById('slicePosV').textContent = (sl.value/100).toFixed(2);
   } else {
-    const s = Math.min(1, norm), s2 = s * s;
-    r = 15 + 240*s2 | 0; g = 10 + 80*s - 40*s2 | 0; b = 15 + 10*s | 0;
+    camDist *= e.deltaY > 0 ? 1.08 : 0.93;
+    camDist = Math.max(1.5, Math.min(6, camDist));
   }
-  return [r, g, b, 255];
+  e.preventDefault();
+}, { passive: false });
+
+// Touch support
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) { dragging = true; lastMX = e.touches[0].clientX; lastMY = e.touches[0].clientY; }
+  e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  if (dragging && e.touches.length === 1) {
+    camYaw += (e.touches[0].clientX - lastMX) * 0.006;
+    camPitch += (e.touches[0].clientY - lastMY) * 0.006;
+    camPitch = Math.max(-1.5, Math.min(1.5, camPitch));
+    lastMX = e.touches[0].clientX; lastMY = e.touches[0].clientY;
+  }
+  e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('touchend', () => dragging = false);
+
+// ============================================================
+// MATRIX MATH (minimal)
+// ============================================================
+function mat4Perspective(fov, aspect, near, far) {
+  const f = 1/Math.tan(fov/2);
+  return new Float32Array([f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)/(near-far),-1, 0,0,2*far*near/(near-far),0]);
 }
-
-function drawSlice() {
-  if (!currentSliceData) return;
-  const data = currentSliceData;
-  const wrap = mainCanvas.parentElement;
-  const dim = Math.min(wrap.clientWidth - 240, wrap.clientHeight - 20, 550);
-  mainCanvas.width = dim; mainCanvas.height = dim;
-  mainCanvas.style.width = dim + 'px'; mainCanvas.style.height = dim + 'px';
-
-  const off = document.createElement('canvas');
-  off.width = data.sliceSize; off.height = data.sliceSize;
-  const octx = off.getContext('2d');
-  const imgData = octx.createImageData(data.sliceSize, data.sliceSize);
-  for (let j = 0; j < data.sliceSize; j++) {
-    for (let i = 0; i < data.sliceSize; i++) {
-      const val = data.density[j * data.sliceSize + i];
-      const [r, g, b, a] = densityColor(val, data.maxAbs);
-      const idx = (j * data.sliceSize + i) * 4;
-      imgData.data[idx] = r; imgData.data[idx+1] = g;
-      imgData.data[idx+2] = b; imgData.data[idx+3] = a;
-    }
-  }
-  octx.putImageData(imgData, 0, 0);
-
-  mainCtx.imageSmoothingEnabled = true;
-  mainCtx.clearRect(0, 0, dim, dim);
-  mainCtx.save();
-  mainCtx.beginPath();
-  mainCtx.arc(dim/2, dim/2, dim/2 - 2, 0, Math.PI * 2);
-  mainCtx.clip();
-  mainCtx.drawImage(off, 0, 0, dim, dim);
-  mainCtx.restore();
-
-  // Draw deformed boundary outline on slice
-  mainCtx.strokeStyle = 'rgba(74, 240, 192, 0.25)';
-  mainCtx.lineWidth = 1;
-  mainCtx.beginPath();
-  const axis = document.getElementById('sliceAxis').value;
-  const sv = parseInt(document.getElementById('slicePos').value) / 100;
-  for (let a = 0; a <= 360; a += 2) {
-    const angle = a * Math.PI / 180;
-    // Find radius at this angle on the slice plane
-    let theta, phi;
-    if (axis === 'z') {
-      // Slice is XY at z=sv. angle sweeps in XY.
-      // We need theta, phi from (cos(a), sin(a), sv)
-      const x = Math.cos(angle), y = Math.sin(angle);
-      const rr = Math.sqrt(x*x + y*y + sv*sv);
-      theta = Math.acos(sv / rr);
-      phi = Math.atan2(y, x); if (phi < 0) phi += 2 * Math.PI;
-    } else if (axis === 'y') {
-      const x = Math.cos(angle), z = Math.sin(angle);
-      const rr = Math.sqrt(x*x + sv*sv + z*z);
-      theta = Math.acos(z / rr);
-      phi = Math.atan2(sv, x); if (phi < 0) phi += 2 * Math.PI;
-    } else {
-      const y = Math.cos(angle), z = Math.sin(angle);
-      const rr = Math.sqrt(sv*sv + y*y + z*z);
-      theta = Math.acos(z / rr);
-      phi = Math.atan2(y, sv); if (phi < 0) phi += 2 * Math.PI;
-    }
-    // Sample radius
-    const j = Math.min(GRID_THETA - 1, Math.max(0, Math.floor(theta / Math.PI * GRID_THETA)));
-    const i = Math.min(GRID_PHI - 1, Math.max(0, Math.floor(phi / (2 * Math.PI) * GRID_PHI)));
-    const r = radius[j * GRID_PHI + i];
-    // Project to canvas
-    const cx = dim/2 + Math.cos(angle) * r * (dim/2 - 2);
-    const cy = dim/2 + Math.sin(angle) * r * (dim/2 - 2);
-    if (a === 0) mainCtx.moveTo(cx, cy);
-    else mainCtx.lineTo(cx, cy);
-  }
-  mainCtx.closePath();
-  mainCtx.stroke();
-
-  // Axis labels
-  mainCtx.fillStyle = 'rgba(200,200,212,0.4)';
-  mainCtx.font = '10px "IBM Plex Mono"';
-  mainCtx.textAlign = 'center';
-  let hL, vL;
-  if (axis === 'z') { hL = 'X'; vL = 'Y'; }
-  else if (axis === 'y') { hL = 'X'; vL = 'Z'; }
-  else { hL = 'Y'; vL = 'Z'; }
-  mainCtx.fillText('-'+hL, 12, dim/2+4);
-  mainCtx.fillText('+'+hL, dim-12, dim/2+4);
-  mainCtx.fillText('-'+vL, dim/2, 12);
-  mainCtx.fillText('+'+vL, dim/2, dim-4);
+function mat4LookAt(eye, center, up) {
+  const zx=eye[0]-center[0],zy=eye[1]-center[1],zz=eye[2]-center[2];
+  const zl=Math.sqrt(zx*zx+zy*zy+zz*zz);
+  const z=[zx/zl,zy/zl,zz/zl];
+  const xx=up[1]*z[2]-up[2]*z[1],xy=up[2]*z[0]-up[0]*z[2],xz=up[0]*z[1]-up[1]*z[0];
+  const xl=Math.sqrt(xx*xx+xy*xy+xz*xz);
+  const x=[xx/xl,xy/xl,xz/xl];
+  const y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];
+  return new Float32Array([x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+    -(x[0]*eye[0]+x[1]*eye[1]+x[2]*eye[2]),
+    -(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),
+    -(z[0]*eye[0]+z[1]*eye[1]+z[2]*eye[2]),1]);
 }
-
-function drawMap() {
-  const w = mapCanvas.width, h = mapCanvas.height;
-  const imgData = mapCtx.createImageData(w, h);
-  const d = imgData.data;
-  // Fill background
-  for (let idx = 0; idx < w * h * 4; idx += 4) {
-    d[idx] = 14; d[idx+1] = 14; d[idx+2] = 22; d[idx+3] = 255;
+function mat4Mul(a, b) {
+  const o = new Float32Array(16);
+  for (let i=0;i<4;i++) for (let j=0;j<4;j++) {
+    o[j*4+i] = a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];
   }
-  // Overlay each visible layer
-  for (let k = 0; k < numLayers; k++) {
-    if (!layerVisible[k]) continue;
-    const col = LAYER_COLORS[k % LAYER_COLORS.length];
-    const alpha = 0.6;
-    for (let pj = 0; pj < h; pj++) {
-      const j = Math.floor(pj / h * GRID_THETA);
-      for (let pi = 0; pi < w; pi++) {
-        const i = Math.floor(pi / w * GRID_PHI);
-        if (layers[k][j * GRID_PHI + i]) {
-          const idx = (pj * w + pi) * 4;
-          d[idx]   = Math.min(255, d[idx]   + col[0] * alpha | 0);
-          d[idx+1] = Math.min(255, d[idx+1] + col[1] * alpha | 0);
-          d[idx+2] = Math.min(255, d[idx+2] + col[2] * alpha | 0);
-        }
-      }
-    }
-  }
-  mapCtx.putImageData(imgData, 0, 0);
+  return o;
 }
-
-function drawGeometry() {
-  const w = geomCanvas.width, h = geomCanvas.height;
-  const imgData = geomCtx.createImageData(w, h);
-  const d = imgData.data;
-  // Find min/max radius
-  let rMin = Infinity, rMax = -Infinity;
-  for (let idx = 0; idx < radius.length; idx++) {
-    if (radius[idx] < rMin) rMin = radius[idx];
-    if (radius[idx] > rMax) rMax = radius[idx];
-  }
-  const rRange = rMax - rMin || 1;
-
-  for (let pj = 0; pj < h; pj++) {
-    const j = Math.floor(pj / h * GRID_THETA);
-    for (let pi = 0; pi < w; pi++) {
-      const i = Math.floor(pi / w * GRID_PHI);
-      const r = radius[j * GRID_PHI + i];
-      const norm = (r - rMin) / rRange; // 0 = min, 1 = max
-      const idx = (pj * w + pi) * 4;
-      // Concave (small r) = warm, convex (large r) = cool
-      if (norm < 0.5) {
-        const s = 1 - norm * 2;
-        d[idx] = 200 * s | 0; d[idx+1] = 60 * s | 0; d[idx+2] = 30 | 0;
-      } else {
-        const s = (norm - 0.5) * 2;
-        d[idx] = 20 | 0; d[idx+1] = 80 * s | 0; d[idx+2] = 200 * s | 0;
-      }
-      d[idx+3] = 255;
-    }
-  }
-  geomCtx.putImageData(imgData, 0, 0);
+function mat4Identity() {
+  return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 }
-
-function drawLegend() {
-  const w = legendCanvas.width = legendCanvas.clientWidth * 2;
-  const h = legendCanvas.height = 24;
-  for (let i = 0; i < w; i++) {
-    const [r, g, b] = densityColor((i/(w-1))*2 - 1, 1);
-    legendCtx.fillStyle = `rgb(${r},${g},${b})`;
-    legendCtx.fillRect(i, 0, 1, h);
-  }
+function mat4RotY(a) {
+  const c=Math.cos(a),s=Math.sin(a);
+  return new Float32Array([c,0,s,0, 0,1,0,0, -s,0,c,0, 0,0,0,1]);
+}
+function mat4RotX(a) {
+  const c=Math.cos(a),s=Math.sin(a);
+  return new Float32Array([1,0,0,0, 0,c,-s,0, 0,s,c,0, 0,0,0,1]);
 }
 
 // ============================================================
-// LAYER TOGGLES UI
+// RENDER LOOP
 // ============================================================
-function buildLayerToggles() {
-  const container = document.getElementById('layerToggles');
-  container.innerHTML = '';
+function render() {
+  resize();
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  // Auto-rotate
+  if (document.getElementById('autoRotate').checked && !dragging) {
+    camYaw += 0.003;
+  }
+
+  const aspect = canvas.width / canvas.height;
+  const proj = mat4Perspective(0.9, aspect, 0.1, 20);
+  const eyeX = camDist * Math.sin(camYaw) * Math.cos(camPitch);
+  const eyeY = camDist * Math.sin(camPitch);
+  const eyeZ = camDist * Math.cos(camYaw) * Math.cos(camPitch);
+  const view = mat4LookAt([eyeX,eyeY,eyeZ],[0,0,0],[0,1,0]);
+  const model = mat4Identity();
+  const mvp = mat4Mul(proj, mat4Mul(view, model));
+
+  gl.uniformMatrix4fv(uMVP, false, mvp);
+  gl.uniformMatrix4fv(uModel, false, model);
+
+  // Light
+  const lx=0.5, ly=0.8, lz=0.6, ll=Math.sqrt(lx*lx+ly*ly+lz*lz);
+  gl.uniform3f(uLightDir, lx/ll, ly/ll, lz/ll);
+
+  // Slice
+  const showSlice = document.getElementById('showSlice').checked ? 1 : 0;
+  const sliceAx = {x:0,y:1,z:2}[document.getElementById('sliceAxis').value];
+  const sliceP = parseInt(document.getElementById('slicePos').value) / 100;
+  gl.uniform1f(uSlicePos, sliceP);
+  gl.uniform1i(uSliceAxis, sliceAx);
+  gl.uniform1i(uShowSlice, showSlice);
+
+  // Bind attribs
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+  gl.enableVertexAttribArray(aColor);
+  gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
+  gl.enableVertexAttribArray(aNormal);
+  gl.vertexAttribPointer(aNormal, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+  gl.drawElements(gl.TRIANGLES, numIndices, gl.UNSIGNED_INT, 0);
+
+  requestAnimationFrame(render);
+}
+
+// ============================================================
+// UI
+// ============================================================
+function buildToggles() {
+  const c = document.getElementById('layerToggles');
+  c.innerHTML = '';
   for (let k = 0; k < numLayers; k++) {
-    const col = LAYER_COLORS[k % LAYER_COLORS.length];
-    const div = document.createElement('div');
-    div.className = 'layer-tog' + (layerVisible[k] ? '' : ' off');
-    div.innerHTML = `<div class="swatch" style="background:rgb(${col.join(',')})"></div>Layer ${k + 1} (w=${LAYER_WEIGHTS[k] >= 0 ? '+' : ''}${(LAYER_WEIGHTS[k] || 0.5).toFixed(1)})`;
-    div.addEventListener('click', () => {
+    const col = COLORS[k % COLORS.length];
+    const d = document.createElement('div');
+    d.className = layerVisible[k] ? '' : 'off';
+    d.innerHTML = `<div class="sw" style="background:rgb(${col})"></div>Layer ${k+1} (w=${WEIGHTS[k]>=0?'+':''}${(WEIGHTS[k]||.5).toFixed(1)})`;
+    d.addEventListener('click', () => {
       layerVisible[k] = !layerVisible[k];
-      div.classList.toggle('off', !layerVisible[k]);
-      fullRender();
+      d.classList.toggle('off', !layerVisible[k]);
+      updateMesh();
     });
-    container.appendChild(div);
+    c.appendChild(d);
   }
 }
 
-// ============================================================
-// STATUS
-// ============================================================
 function updateStatus() {
-  let total = 0;
-  for (let k = 0; k < numLayers; k++) {
-    for (let idx = 0; idx < layers[k].length; idx++) total += layers[k][idx];
-  }
-  document.getElementById('statusBar').innerHTML =
-    `Gen: <span>${generation}</span> | Cells: <span>${total}</span> / ${numLayers * GRID_THETA * GRID_PHI}`;
-  document.getElementById('timeDisp').textContent = `gen ${generation}`;
+  let tot = 0;
+  for (let k = 0; k < numLayers; k++) for (let i = 0; i < NCELLS; i++) tot += layers[k][i];
+  document.getElementById('status').innerHTML = `Gen: <span>${generation}</span> | Alive: <span>${tot}</span>`;
+  document.getElementById('genDisp').textContent = `gen ${generation}`;
 }
 
-// ============================================================
-// FULL RENDER PIPELINE
-// ============================================================
-function fullRender() {
-  computeSlice();
-  drawSlice();
-  drawMap();
-  drawGeometry();
-}
-
-// ============================================================
-// PLAY / STEP / RESET
-// ============================================================
-function doStep() {
-  step();
-  fullRender();
-}
+// Sim step + mesh update
+function doStep() { step(); updateMesh(); }
 
 document.getElementById('playBtn').addEventListener('click', () => {
   playing = !playing;
-  const btn = document.getElementById('playBtn');
-  btn.innerHTML = playing ? '&#9208;' : '&#9654;';
-  btn.classList.toggle('active', playing);
+  const b = document.getElementById('playBtn');
+  b.innerHTML = playing ? '&#9208;' : '&#9654;';
+  b.classList.toggle('on', playing);
   if (playing) runPlay();
   else clearTimeout(playTimer);
 });
-
-document.getElementById('stepBtn').addEventListener('click', () => {
-  if (!playing) doStep();
-});
-
+document.getElementById('stepBtn').addEventListener('click', () => { if (!playing) doStep(); });
 document.getElementById('resetBtn').addEventListener('click', () => {
-  playing = false;
-  clearTimeout(playTimer);
+  playing = false; clearTimeout(playTimer);
   document.getElementById('playBtn').innerHTML = '&#9654;';
-  document.getElementById('playBtn').classList.remove('active');
-  initLayers();
-  fullRender();
+  document.getElementById('playBtn').classList.remove('on');
+  initLayers(); updateMesh();
 });
 
 function runPlay() {
   if (!playing) return;
-  const delay = parseInt(document.getElementById('delaySlider').value);
   doStep();
-  playTimer = setTimeout(runPlay, delay);
+  playTimer = setTimeout(runPlay, parseInt(document.getElementById('delay').value));
 }
 
-// ============================================================
-// CONTROL LISTENERS
-// ============================================================
-document.getElementById('delaySlider').addEventListener('input', function() {
-  document.getElementById('delayVal').textContent = this.value;
-});
-document.getElementById('initDensity').addEventListener('input', function() {
-  document.getElementById('initDensVal').textContent = this.value + '%';
-});
-document.getElementById('couplingStr').addEventListener('input', function() {
-  document.getElementById('couplingVal').textContent = (this.value / 100).toFixed(2);
-});
-document.getElementById('killThresh').addEventListener('input', function() {
-  document.getElementById('killVal').textContent = (this.value / 100).toFixed(2);
-});
-document.getElementById('deformStr').addEventListener('input', function() {
-  document.getElementById('deformVal').textContent = (this.value / 100).toFixed(2);
-});
-document.getElementById('geomSmooth').addEventListener('input', function() {
-  document.getElementById('geomSmoothVal').textContent = this.value;
-});
-document.getElementById('slicePos').addEventListener('input', function() {
-  document.getElementById('slicePosVal').textContent = (this.value / 100).toFixed(2);
-  fullRender();
-});
-document.getElementById('surfRes').addEventListener('input', function() {
-  document.getElementById('surfResVal').textContent = this.value;
-  fullRender();
-});
-document.getElementById('sliceAxis').addEventListener('change', fullRender);
-document.getElementById('encodingMode').addEventListener('change', fullRender);
+// Slider value displays
+for (const [id, vId, fmt] of [
+  ['delay','delayV',v=>v],['initDens','initDensV',v=>v+'%'],
+  ['coupling','couplingV',v=>(v/100).toFixed(2)],['killTh','killThV',v=>(v/100).toFixed(2)],
+  ['deformStr','deformStrV',v=>(v/100).toFixed(2)],['geomSmooth','geomSmoothV',v=>v],
+  ['slicePos','slicePosV',v=>(v/100).toFixed(2)],
+]) {
+  document.getElementById(id).addEventListener('input', function() {
+    document.getElementById(vId).textContent = fmt(this.value);
+  });
+}
+
 document.getElementById('numLayers').addEventListener('change', () => {
-  const wasPlaying = playing;
   playing = false; clearTimeout(playTimer);
   document.getElementById('playBtn').innerHTML = '&#9654;';
-  document.getElementById('playBtn').classList.remove('active');
-  initLayers();
-  fullRender();
+  document.getElementById('playBtn').classList.remove('on');
+  initLayers(); updateMesh();
 });
-
-// Hover
-mainCanvas.addEventListener('mousemove', (e) => {
-  if (!currentSliceData) return;
-  const rect = mainCanvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) / rect.width;
-  const my = (e.clientY - rect.top) / rect.height;
-  if ((mx*2-1)**2 + (my*2-1)**2 < 1) {
-    const pi = mx * currentSliceData.sliceSize | 0;
-    const pj = my * currentSliceData.sliceSize | 0;
-    if (pi >= 0 && pi < currentSliceData.sliceSize && pj >= 0 && pj < currentSliceData.sliceSize) {
-      const val = currentSliceData.density[pj * currentSliceData.sliceSize + pi];
-      document.getElementById('infoLine').innerHTML =
-        `Density: <span>${val.toFixed(4)}</span> | Max: <span>${currentSliceData.maxAbs.toFixed(4)}</span>`;
-    }
-  }
-});
-
-window.addEventListener('resize', () => { if (currentSliceData) drawSlice(); });
 
 // ============================================================
-// INIT
+// BOOT
 // ============================================================
 initLayers();
-drawLegend();
-fullRender();
+updateMesh();
+requestAnimationFrame(render);
 </script>
 </body>
 </html>
