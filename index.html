@@ -3,12 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spherical Projection Density</title>
+<title>Spherical Projection Density — Multi-Layer</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Space+Grotesk:wght@400;600&display=swap');
-
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
   :root {
     --bg: #0a0a0f;
     --panel: #12121a;
@@ -16,500 +14,623 @@
     --text: #c8c8d4;
     --text-dim: #6a6a7a;
     --accent: #4af0c0;
-    --accent2: #f04a8a;
-    --hot: #ff6030;
-    --cold: #2040ff;
   }
-
   body {
-    background: var(--bg);
-    color: var(--text);
+    background: var(--bg); color: var(--text);
     font-family: 'IBM Plex Mono', monospace;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
   }
-
   header {
-    padding: 12px 20px;
+    padding: 10px 20px;
     border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between;
     flex-shrink: 0;
   }
-
   header h1 {
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    color: var(--accent);
+    font-size: 14px; font-weight: 600;
+    letter-spacing: 0.5px; color: var(--accent);
   }
+  header .subtitle { font-size: 10px; color: var(--text-dim); }
 
-  header .subtitle {
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-
-  .main-layout {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
+  .main-layout { display: flex; flex: 1; overflow: hidden; }
 
   .canvas-wrap {
-    flex: 1;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    flex: 1; position: relative;
+    display: flex; align-items: center; justify-content: center;
   }
-
   #mainCanvas { background: transparent; }
 
-  .map-inset {
+  /* Insets */
+  .inset {
     position: absolute;
-    top: 16px;
-    right: 16px;
     border: 1px solid var(--border);
     background: var(--panel);
-    border-radius: 4px;
-    overflow: hidden;
+    border-radius: 4px; overflow: hidden;
   }
-
-  .map-inset .label {
-    font-size: 9px;
-    color: var(--text-dim);
-    padding: 3px 6px;
-    background: rgba(0,0,0,0.4);
-    position: absolute;
-    top: 0; left: 0;
-    z-index: 2;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+  .inset .label {
+    font-size: 8px; color: var(--text-dim);
+    padding: 2px 5px; background: rgba(0,0,0,0.5);
+    position: absolute; top: 0; left: 0; z-index: 2;
+    letter-spacing: 0.8px; text-transform: uppercase;
   }
+  .map-inset { top: 12px; right: 12px; }
+  .geom-inset { top: 128px; right: 12px; }
 
-  .fps-counter {
-    position: absolute;
-    bottom: 12px;
-    left: 12px;
-    font-size: 10px;
-    color: var(--text-dim);
-    letter-spacing: 0.5px;
+  .status-bar {
+    position: absolute; bottom: 10px; left: 10px;
+    font-size: 10px; color: var(--text-dim);
   }
-  .fps-counter span { color: var(--accent); }
+  .status-bar span { color: var(--accent); }
 
+  /* Controls */
   .controls {
-    width: 260px;
-    background: var(--panel);
+    width: 270px; background: var(--panel);
     border-left: 1px solid var(--border);
-    padding: 16px;
-    overflow-y: auto;
-    flex-shrink: 0;
+    padding: 14px; overflow-y: auto; flex-shrink: 0;
   }
-
   .controls h2 {
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: var(--text-dim);
-    margin-bottom: 12px;
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--text-dim);
+    margin-bottom: 8px; margin-top: 14px;
   }
-
-  .ctrl-group {
-    margin-bottom: 16px;
+  .controls h2:first-child { margin-top: 0; }
+  .cg { margin-bottom: 10px; }
+  .cg label { display: block; font-size: 10px; color: var(--text-dim); margin-bottom: 3px; }
+  .cg select, .cg input[type="range"] {
+    width: 100%; background: var(--bg);
+    border: 1px solid var(--border); color: var(--text);
+    padding: 3px 5px; font-family: inherit; font-size: 10px;
+    border-radius: 3px; outline: none;
   }
-
-  .ctrl-group label {
-    display: block;
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-bottom: 4px;
+  .cg input[type="range"] {
+    -webkit-appearance: none; height: 4px;
+    border: none; border-radius: 2px; background: var(--border); cursor: pointer;
   }
-
-  .ctrl-group select,
-  .ctrl-group input[type="range"] {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 4px 6px;
-    font-family: inherit;
-    font-size: 11px;
-    border-radius: 3px;
-    outline: none;
+  .cg input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--accent); cursor: pointer;
   }
+  .cg .val { font-size: 10px; color: var(--accent); float: right; margin-top: -14px; }
 
-  .ctrl-group input[type="range"] {
-    -webkit-appearance: none;
-    height: 4px;
-    border: none;
-    border-radius: 2px;
-    background: var(--border);
-    cursor: pointer;
-  }
-
-  .ctrl-group input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 12px; height: 12px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-  }
-
-  .ctrl-group .value {
-    font-size: 11px;
-    color: var(--accent);
-    float: right;
-    margin-top: -16px;
-  }
-
-  .play-row {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    margin-bottom: 12px;
-  }
-
-  .play-btn {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--accent);
-    font-family: inherit;
-    font-size: 13px;
-    width: 34px; height: 28px;
-    border-radius: 3px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .play-row { display: flex; gap: 5px; align-items: center; margin-bottom: 10px; }
+  .pbtn {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--accent); font-family: inherit; font-size: 12px;
+    width: 30px; height: 26px; border-radius: 3px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
     transition: background 0.15s;
   }
-  .play-btn:hover { background: var(--border); }
-  .play-btn.active { background: var(--accent); color: var(--bg); }
-
-  .time-display {
-    font-size: 13px;
-    color: var(--accent);
+  .pbtn:hover { background: var(--border); }
+  .pbtn.active { background: var(--accent); color: var(--bg); }
+  .time-disp {
+    font-size: 11px; color: var(--accent);
     font-variant-numeric: tabular-nums;
-    flex: 1;
-    text-align: right;
-    letter-spacing: 0.5px;
+    flex: 1; text-align: right;
   }
 
-  .legend {
-    margin-top: 20px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
+  /* Layer toggles */
+  .layer-toggles { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .layer-tog {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10px; cursor: pointer; padding: 3px 0;
   }
-
-  .legend canvas {
-    width: 100%;
-    height: 14px;
-    border-radius: 2px;
+  .layer-tog .swatch {
+    width: 12px; height: 12px; border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.15);
   }
+  .layer-tog.off .swatch { opacity: 0.2; }
+  .layer-tog.off { color: var(--text-dim); text-decoration: line-through; }
 
+  .legend { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .legend canvas { width: 100%; height: 12px; border-radius: 2px; }
   .legend .bounds {
-    display: flex;
-    justify-content: space-between;
-    font-size: 9px;
-    color: var(--text-dim);
-    margin-top: 2px;
+    display: flex; justify-content: space-between;
+    font-size: 8px; color: var(--text-dim); margin-top: 2px;
   }
-
-  .info-line {
-    font-size: 10px;
-    color: var(--text-dim);
-    margin-top: 8px;
-    line-height: 1.5;
-  }
+  .info-line { font-size: 9px; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
   .info-line span { color: var(--accent); }
-
-  .computing-indicator {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 11px;
-    color: var(--accent);
-    opacity: 0;
-    transition: opacity 0.2s;
-    pointer-events: none;
-    letter-spacing: 1px;
-  }
-  .computing-indicator.visible { opacity: 0.7; }
 </style>
 </head>
 <body>
 
 <header>
   <div>
-    <h1>Spherical Projection Density</h1>
-    <div class="subtitle">Surface &rarr; Volume holographic encoding</div>
+    <h1>Spherical Projection Density &mdash; Multi-Layer</h1>
+    <div class="subtitle">Coupled cellular automata on a deformable sphere</div>
   </div>
 </header>
 
 <div class="main-layout">
   <div class="canvas-wrap">
     <canvas id="mainCanvas"></canvas>
-    <div class="map-inset">
-      <div class="label">2D Surface Map</div>
+    <div class="inset map-inset">
+      <div class="label">Layers (equirect)</div>
       <canvas id="mapCanvas" width="200" height="100"></canvas>
     </div>
-    <div class="fps-counter" id="fpsCounter">FPS: <span>--</span></div>
-    <div class="computing-indicator" id="computingInd">COMPUTING...</div>
+    <div class="inset geom-inset">
+      <div class="label">Geometry R(&theta;,&phi;)</div>
+      <canvas id="geomCanvas" width="200" height="100"></canvas>
+    </div>
+    <div class="status-bar" id="statusBar">Gen: <span>0</span> | Cells: <span>0</span></div>
   </div>
 
   <div class="controls">
     <h2>Animation</h2>
     <div class="play-row">
-      <button class="play-btn" id="playBtn" title="Play/Pause">&#9654;</button>
-      <button class="play-btn" id="resetBtn" title="Reset">&#9198;</button>
-      <div class="time-display" id="timeDisplay">t = 0.000</div>
+      <button class="pbtn" id="playBtn" title="Play/Pause">&#9654;</button>
+      <button class="pbtn" id="stepBtn" title="Step">&#9654;|</button>
+      <button class="pbtn" id="resetBtn" title="Reset">&#8634;</button>
+      <div class="time-disp" id="timeDisp">gen 0</div>
     </div>
-    <div class="ctrl-group">
-      <label>Speed</label>
-      <input type="range" id="speedSlider" min="1" max="100" value="20">
-      <div class="value" id="speedVal">0.20</div>
+    <div class="cg">
+      <label>Step Delay (ms)</label>
+      <input type="range" id="delaySlider" min="0" max="500" value="100">
+      <div class="val" id="delayVal">100</div>
     </div>
 
-    <h2>Surface Shape</h2>
-    <div class="ctrl-group">
-      <label>Pattern</label>
-      <select id="patternSelect">
-        <option value="earth">Earth (Continents)</option>
-        <option value="single_cap">Single Cap</option>
-        <option value="two_caps">Two Caps (Antipodal)</option>
-        <option value="band">Equatorial Band</option>
-        <option value="spots">Random Spots</option>
-        <option value="checker">Checkerboard</option>
+    <h2>Layers</h2>
+    <div class="layer-toggles" id="layerToggles"></div>
+    <div class="cg">
+      <label>Num Layers</label>
+      <select id="numLayers">
+        <option value="2">2</option>
+        <option value="3" selected>3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
       </select>
+    </div>
+    <div class="cg">
+      <label>Init Density</label>
+      <input type="range" id="initDensity" min="10" max="60" value="30">
+      <div class="val" id="initDensVal">30%</div>
+    </div>
+
+    <h2>Rules</h2>
+    <div class="cg">
+      <label>Survive (neighbors)</label>
+      <select id="surviveRule">
+        <option value="2,3" selected>2-3 (classic)</option>
+        <option value="2,3,4">2-3-4 (permissive)</option>
+        <option value="3,4">3-4 (tight)</option>
+      </select>
+    </div>
+    <div class="cg">
+      <label>Birth (neighbors)</label>
+      <select id="birthRule">
+        <option value="3" selected>3 (classic)</option>
+        <option value="2,3">2-3 (expansive)</option>
+        <option value="3,4">3-4 (slow)</option>
+      </select>
+    </div>
+    <div class="cg">
+      <label>Density Coupling Strength</label>
+      <input type="range" id="couplingStr" min="0" max="100" value="40">
+      <div class="val" id="couplingVal">0.40</div>
+    </div>
+    <div class="cg">
+      <label>Density Kill Threshold</label>
+      <input type="range" id="killThresh" min="0" max="100" value="70">
+      <div class="val" id="killVal">0.70</div>
+    </div>
+
+    <h2>Geometry</h2>
+    <div class="cg">
+      <label>Deformation Strength</label>
+      <input type="range" id="deformStr" min="0" max="100" value="30">
+      <div class="val" id="deformVal">0.30</div>
+    </div>
+    <div class="cg">
+      <label>Geometry Smoothing</label>
+      <input type="range" id="geomSmooth" min="1" max="10" value="3">
+      <div class="val" id="geomSmoothVal">3</div>
     </div>
 
     <h2>Cross Section</h2>
-    <div class="ctrl-group">
+    <div class="cg">
       <label>Slice Axis</label>
       <select id="sliceAxis">
-        <option value="z">XY Plane (Z slice)</option>
-        <option value="y">XZ Plane (Y slice)</option>
-        <option value="x">YZ Plane (X slice)</option>
+        <option value="z">XY plane (Z slice)</option>
+        <option value="y">XZ plane (Y slice)</option>
+        <option value="x">YZ plane (X slice)</option>
       </select>
     </div>
-    <div class="ctrl-group">
+    <div class="cg">
       <label>Slice Position</label>
       <input type="range" id="slicePos" min="-100" max="100" value="0">
-      <div class="value" id="slicePosVal">0.00</div>
+      <div class="val" id="slicePosVal">0.00</div>
     </div>
-
-    <h2>Projection</h2>
-    <div class="ctrl-group">
-      <label>Encoding Mode</label>
+    <div class="cg">
+      <label>Encoding</label>
       <select id="encodingMode">
-        <option value="magnitude">Magnitude (|d|)</option>
-        <option value="signed">Signed (dipole)</option>
+        <option value="signed" selected>Signed (dipole)</option>
+        <option value="magnitude">Magnitude</option>
         <option value="inverse">Inverse (1/d&sup2;)</option>
       </select>
     </div>
-    <div class="ctrl-group">
+    <div class="cg">
       <label>Surface Resolution</label>
-      <input type="range" id="surfRes" min="20" max="80" value="40">
-      <div class="value" id="surfResVal">40</div>
+      <input type="range" id="surfRes" min="16" max="60" value="30">
+      <div class="val" id="surfResVal">30</div>
     </div>
 
     <div class="legend">
-      <label style="font-size:10px;color:var(--text-dim);margin-bottom:4px;display:block;">Density Scale</label>
-      <canvas id="legendCanvas" height="14"></canvas>
-      <div class="bounds">
-        <span>&minus;max</span>
-        <span>0</span>
-        <span>+max</span>
-      </div>
+      <canvas id="legendCanvas" height="12"></canvas>
+      <div class="bounds"><span>&minus;max</span><span>0</span><span>+max</span></div>
     </div>
-
-    <div class="info-line" id="infoLine">
-      Hover cross section for point density
-    </div>
+    <div class="info-line" id="infoLine">Hover for density</div>
   </div>
 </div>
 
 <script>
 // ============================================================
-// WEB WORKER (inline blob) — all heavy compute off main thread
+// CONFIG
 // ============================================================
-const workerCode = `
-function patternEarth(theta, phi, t) {
-  const lat = Math.PI / 2 - theta;
-  const lon = phi - Math.PI + t * 0.5;
-  const blobs = [
-    { lat: 0.8, lon: -0.5, r: 0.55 },
-    { lat: 0.2, lon: -0.8, r: 0.35 },
-    { lat: 0.85, lon: 0.2, r: 0.4 },
-    { lat: 0.6, lon: 0.5, r: 0.55 },
-    { lat: 0.7, lon: 1.5, r: 0.6 },
-    { lat: -0.5, lon: 2.0, r: 0.45 },
-    { lat: -1.2, lon: 0.0, r: 0.5 },
-  ];
-  for (const b of blobs) {
-    const dlat = lat - b.lat;
-    const dlon = ((lon - b.lon + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    const dist = Math.sqrt(dlat * dlat + dlon * dlon * Math.cos(lat) * Math.cos(lat));
-    if (dist < b.r) return 1.0;
+const GRID_THETA = 60;   // latitude cells
+const GRID_PHI   = 120;  // longitude cells
+const R0 = 1.0;
+const LAYER_COLORS = [
+  [74, 240, 192],   // teal
+  [240, 74, 138],   // pink
+  [100, 140, 255],  // blue
+  [255, 200, 60],   // gold
+  [180, 120, 255],  // purple
+];
+const LAYER_WEIGHTS = [1.0, -0.8, 0.6, -0.5, 0.4]; // signed weights for density
+
+// ============================================================
+// STATE
+// ============================================================
+let numLayers = 3;
+let layers = [];        // layers[k][j * GRID_PHI + i] = 0 or 1
+let radius = null;      // radius[j * GRID_PHI + i] = R(theta, phi)
+let generation = 0;
+let playing = false;
+let playTimer = null;
+let layerVisible = [];
+let currentSliceData = null;
+
+// ============================================================
+// GRID HELPERS
+// ============================================================
+function thetaOf(j) { return (j + 0.5) / GRID_THETA * Math.PI; }
+function phiOf(i) { return (i + 0.5) / GRID_PHI * 2 * Math.PI; }
+
+function sphereToCart(theta, phi, r) {
+  const st = Math.sin(theta);
+  return [r * st * Math.cos(phi), r * st * Math.sin(phi), r * Math.cos(theta)];
+}
+
+// Get 6 neighbors on spherical grid (hex-ish)
+function getNeighbors(j, i) {
+  const n = [];
+  const jp = j > 0 ? j - 1 : GRID_THETA - 1;
+  const jn = j < GRID_THETA - 1 ? j + 1 : 0;
+  const ip = (i - 1 + GRID_PHI) % GRID_PHI;
+  const in_ = (i + 1) % GRID_PHI;
+  // 4 cardinal
+  n.push(jp * GRID_PHI + i);
+  n.push(jn * GRID_PHI + i);
+  n.push(j * GRID_PHI + ip);
+  n.push(j * GRID_PHI + in_);
+  // 2 diagonal (offset for hex feel)
+  n.push(jp * GRID_PHI + in_);
+  n.push(jn * GRID_PHI + ip);
+  return n;
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function initLayers() {
+  const density = parseInt(document.getElementById('initDensity').value) / 100;
+  numLayers = parseInt(document.getElementById('numLayers').value);
+  layers = [];
+  for (let k = 0; k < numLayers; k++) {
+    const layer = new Uint8Array(GRID_THETA * GRID_PHI);
+    for (let idx = 0; idx < layer.length; idx++) {
+      layer[idx] = Math.random() < density ? 1 : 0;
+    }
+    layers.push(layer);
   }
-  return 0.0;
+  radius = new Float32Array(GRID_THETA * GRID_PHI);
+  radius.fill(R0);
+  generation = 0;
+  layerVisible = [];
+  for (let k = 0; k < numLayers; k++) layerVisible.push(true);
+  buildLayerToggles();
+  updateStatus();
 }
-function patternSingleCap(theta, phi, t) {
-  return theta < (0.6 + 0.3 * Math.sin(t)) ? 1.0 : 0.0;
-}
-function patternTwoCaps(theta, phi, t) {
-  const size = 0.5 + 0.2 * Math.sin(t * 2);
-  return (theta < size || theta > Math.PI - size) ? 1.0 : 0.0;
-}
-function patternBand(theta, phi, t) {
-  const center = Math.PI / 2 + 0.3 * Math.sin(t);
-  const width = 0.3 + 0.15 * Math.cos(t * 1.5);
-  return Math.abs(theta - center) < width ? 1.0 : 0.0;
-}
-function patternSpots(theta, phi, t) {
-  const v = Math.sin(theta * 5.1 + t * 0.3) * Math.sin(phi * 3.7 + t * 0.2)
-          + Math.sin(theta * 7.3 - t * 0.15) * Math.cos(phi * 5.1);
-  return v > 0.5 ? 1.0 : 0.0;
-}
-function patternChecker(theta, phi, t) {
-  const nTheta = 6, nPhi = 12;
-  const it = Math.floor(theta / Math.PI * nTheta);
-  const ip = Math.floor((phi + t * 0.3) / (2 * Math.PI) * nPhi);
-  return (it + ip) % 2 === 0 ? 1.0 : 0.0;
-}
-const patterns = {
-  earth: patternEarth, single_cap: patternSingleCap,
-  two_caps: patternTwoCaps, band: patternBand,
-  spots: patternSpots, checker: patternChecker,
-};
 
-self.onmessage = function(e) {
-  const { pattern, axis, sliceVal, res, encoding, tVal, jobId } = e.data;
-  const patternFn = patterns[pattern];
-  const nSurf = parseInt(res);
-  const sliceSize = 200;
+// ============================================================
+// EVOLUTION
+// ============================================================
+function parseRule(str) { return str.split(',').map(Number); }
 
-  // Pre-sample surface — flat array for speed
-  const sp = [];
-  for (let it = 0; it < nSurf; it++) {
-    const theta = (it + 0.5) / nSurf * Math.PI;
-    const sinT = Math.sin(theta);
-    const cosT = Math.cos(theta);
-    const nPhi = Math.max(4, Math.floor(nSurf * 2 * sinT));
-    for (let ip = 0; ip < nPhi; ip++) {
-      const phi = ip / nPhi * 2 * Math.PI;
-      const val = patternFn(theta, phi, tVal);
-      if (val > 0.01) {
-        const dOmega = (Math.PI / nSurf) * (2 * Math.PI / nPhi) * sinT;
-        sp.push(sinT * Math.cos(phi), sinT * Math.sin(phi), cosT, val, dOmega);
+function step() {
+  const surviveSet = new Set(parseRule(document.getElementById('surviveRule').value));
+  const birthSet = new Set(parseRule(document.getElementById('birthRule').value));
+  const coupling = parseInt(document.getElementById('couplingStr').value) / 100;
+  const killThresh = parseInt(document.getElementById('killThresh').value) / 100;
+
+  // 1. Compute combined activity per cell (sum of all layers)
+  const activity = new Float32Array(GRID_THETA * GRID_PHI);
+  for (let k = 0; k < numLayers; k++) {
+    for (let idx = 0; idx < activity.length; idx++) {
+      activity[idx] += layers[k][idx];
+    }
+  }
+
+  // 2. Compute cross-layer density influence per cell per layer
+  //    Simplified: instead of full volumetric projection (too expensive per step),
+  //    we use a spherical convolution — each cell is influenced by a weighted
+  //    sum of other-layer cells, weighted by angular proximity and radius.
+  //    This captures the "projection through interior" effect efficiently.
+  const crossInfluence = [];
+  for (let k = 0; k < numLayers; k++) {
+    crossInfluence.push(new Float32Array(GRID_THETA * GRID_PHI));
+  }
+
+  // For each cell, accumulate influence from other layers within angular window
+  // Use a coarse pass for performance
+  const SAMPLE_STEP = 3;
+  for (let k = 0; k < numLayers; k++) {
+    for (let j = 0; j < GRID_THETA; j++) {
+      const theta1 = thetaOf(j);
+      const cosT1 = Math.cos(theta1), sinT1 = Math.sin(theta1);
+      for (let i = 0; i < GRID_PHI; i++) {
+        const phi1 = phiOf(i);
+        const idx1 = j * GRID_PHI + i;
+        const r1 = radius[idx1];
+
+        let inf = 0;
+        for (let kk = 0; kk < numLayers; kk++) {
+          if (kk === k) continue;
+          const w = LAYER_WEIGHTS[kk] || 0.5;
+          for (let jj = 0; jj < GRID_THETA; jj += SAMPLE_STEP) {
+            const theta2 = thetaOf(jj);
+            const cosT2 = Math.cos(theta2), sinT2 = Math.sin(theta2);
+            for (let ii = 0; ii < GRID_PHI; ii += SAMPLE_STEP) {
+              if (!layers[kk][jj * GRID_PHI + ii]) continue;
+              const phi2 = phiOf(ii);
+              const r2 = radius[jj * GRID_PHI + ii];
+              // Angular distance (great circle)
+              const cosAng = cosT1 * cosT2 + sinT1 * sinT2 * Math.cos(phi1 - phi2);
+              // Effective 3D distance through interior
+              const d = Math.sqrt(r1*r1 + r2*r2 - 2*r1*r2*cosAng);
+              if (d < 0.01) continue;
+              // Signed contribution: positive if same hemisphere, negative if opposite
+              inf += w * cosAng / (d + 0.1);
+            }
+          }
+        }
+        crossInfluence[k][idx1] = inf;
       }
     }
   }
-  const nPts = sp.length / 5;
 
+  // Normalize cross influence per layer
+  for (let k = 0; k < numLayers; k++) {
+    let maxCI = 0;
+    for (let idx = 0; idx < crossInfluence[k].length; idx++) {
+      const a = Math.abs(crossInfluence[k][idx]);
+      if (a > maxCI) maxCI = a;
+    }
+    if (maxCI > 0) {
+      for (let idx = 0; idx < crossInfluence[k].length; idx++) {
+        crossInfluence[k][idx] /= maxCI;
+      }
+    }
+  }
+
+  // 3. Apply rules
+  const newLayers = [];
+  for (let k = 0; k < numLayers; k++) {
+    const newLayer = new Uint8Array(GRID_THETA * GRID_PHI);
+    for (let j = 0; j < GRID_THETA; j++) {
+      for (let i = 0; i < GRID_PHI; i++) {
+        const idx = j * GRID_PHI + i;
+        const alive = layers[k][idx];
+
+        // Count same-layer neighbors
+        const nbrs = getNeighbors(j, i);
+        let count = 0;
+        for (const n of nbrs) count += layers[k][n];
+
+        // Cross-layer influence modifies survival
+        const ci = crossInfluence[k][idx] * coupling;
+        const densityPressure = Math.abs(ci);
+
+        // Base GoL rule
+        let survives = false;
+        if (alive) {
+          survives = surviveSet.has(count);
+        } else {
+          survives = birthSet.has(count);
+        }
+
+        // Density coupling: kill if cross-layer pressure too high
+        if (survives && densityPressure > killThresh) {
+          // High opposing density kills; high supporting density can help
+          if (ci < 0) survives = false; // opposing layers suppress
+        }
+
+        // Density coupling: boost birth if moderate positive influence
+        if (!alive && !survives && ci > 0.2 * coupling && count >= 2) {
+          survives = true; // cross-layer support helps birth
+        }
+
+        newLayer[idx] = survives ? 1 : 0;
+      }
+    }
+    newLayers.push(newLayer);
+  }
+
+  layers = newLayers;
+
+  // 4. Update geometry
+  updateGeometry(activity);
+
+  generation++;
+  updateStatus();
+}
+
+// ============================================================
+// GEOMETRY DEFORMATION
+// ============================================================
+function updateGeometry(activity) {
+  const strength = parseInt(document.getElementById('deformStr').value) / 100;
+  const smoothPasses = parseInt(document.getElementById('geomSmooth').value);
+
+  if (strength < 0.001) {
+    radius.fill(R0);
+    return;
+  }
+
+  // Recompute current activity
+  const act = activity || new Float32Array(GRID_THETA * GRID_PHI);
+  if (!activity) {
+    for (let k = 0; k < numLayers; k++) {
+      for (let idx = 0; idx < act.length; idx++) act[idx] += layers[k][idx];
+    }
+  }
+
+  // Max activity = numLayers
+  const maxAct = numLayers;
+
+  // Raw displacement: high activity → concave (negative), low → convex (positive)
+  const disp = new Float32Array(GRID_THETA * GRID_PHI);
+  for (let idx = 0; idx < disp.length; idx++) {
+    const norm = act[idx] / maxAct; // 0 to 1
+    disp[idx] = (0.5 - norm) * strength * 0.3; // centered, scaled
+  }
+
+  // Smooth the displacement field
+  let buf = disp;
+  for (let pass = 0; pass < smoothPasses; pass++) {
+    const smoothed = new Float32Array(buf.length);
+    for (let j = 0; j < GRID_THETA; j++) {
+      for (let i = 0; i < GRID_PHI; i++) {
+        const idx = j * GRID_PHI + i;
+        const nbrs = getNeighbors(j, i);
+        let sum = buf[idx] * 2;
+        for (const n of nbrs) sum += buf[n];
+        smoothed[idx] = sum / (2 + nbrs.length);
+      }
+    }
+    buf = smoothed;
+  }
+
+  // Apply displacement and enforce constant surface area
+  // Surface area element: dA = R^2 sin(theta) dtheta dphi
+  // We want sum(R_i^2 * sin(theta_i)) = sum(R0^2 * sin(theta_i))
+  for (let idx = 0; idx < radius.length; idx++) {
+    radius[idx] = R0 + buf[idx];
+  }
+
+  // Compute current surface area
+  let saOriginal = 0, saCurrent = 0;
+  const dTheta = Math.PI / GRID_THETA;
+  const dPhi = 2 * Math.PI / GRID_PHI;
+  for (let j = 0; j < GRID_THETA; j++) {
+    const sinT = Math.sin(thetaOf(j));
+    for (let i = 0; i < GRID_PHI; i++) {
+      const idx = j * GRID_PHI + i;
+      saOriginal += R0 * R0 * sinT;
+      saCurrent += radius[idx] * radius[idx] * sinT;
+    }
+  }
+
+  // Rescale radii to preserve surface area
+  const scale = Math.sqrt(saOriginal / saCurrent);
+  for (let idx = 0; idx < radius.length; idx++) {
+    radius[idx] *= scale;
+  }
+}
+
+// ============================================================
+// DENSITY SLICE COMPUTATION (main thread, single slice only)
+// ============================================================
+function computeSlice() {
+  const axis = document.getElementById('sliceAxis').value;
+  const sliceVal = parseInt(document.getElementById('slicePos').value) / 100;
+  const encoding = document.getElementById('encodingMode').value;
+  const nSurf = parseInt(document.getElementById('surfRes').value);
+  const sliceSize = 150;
+
+  // Collect all surface points from visible layers
+  const surfPts = []; // [x, y, z, weight, dOmega]
+  for (let k = 0; k < numLayers; k++) {
+    if (!layerVisible[k]) continue;
+    const w = LAYER_WEIGHTS[k] || 0.5;
+    for (let jj = 0; jj < nSurf; jj++) {
+      const j = Math.floor(jj / nSurf * GRID_THETA);
+      const theta = thetaOf(j);
+      const sinT = Math.sin(theta);
+      const nPhiL = Math.max(4, Math.floor(nSurf * 2 * sinT));
+      for (let ii = 0; ii < nPhiL; ii++) {
+        const i = Math.floor(ii / nPhiL * GRID_PHI);
+        const idx = j * GRID_PHI + i;
+        if (!layers[k][idx]) continue;
+        const phi = phiOf(i);
+        const r = radius[idx];
+        const [sx, sy, sz] = sphereToCart(theta, phi, r);
+        const dOmega = (Math.PI / nSurf) * (2 * Math.PI / nPhiL) * sinT;
+        surfPts.push(sx, sy, sz, w, dOmega);
+      }
+    }
+  }
+
+  const nPts = surfPts.length / 5;
   const density = new Float32Array(sliceSize * sliceSize);
   let maxAbs = 0;
 
-  for (let j = 0; j < sliceSize; j++) {
-    for (let i = 0; i < sliceSize; i++) {
-      const u = (i / (sliceSize - 1)) * 2 - 1;
-      const v = (j / (sliceSize - 1)) * 2 - 1;
+  for (let pj = 0; pj < sliceSize; pj++) {
+    for (let pi = 0; pi < sliceSize; pi++) {
+      const u = (pi / (sliceSize - 1)) * 2 - 1;
+      const v = (pj / (sliceSize - 1)) * 2 - 1;
       let px, py, pz;
       if (axis === 'z') { px = u; py = v; pz = sliceVal; }
       else if (axis === 'y') { px = u; py = sliceVal; pz = v; }
       else { px = sliceVal; py = u; pz = v; }
-      if (px*px + py*py + pz*pz >= 1.0) continue;
+
+      // Check rough bounds (max deformed radius ~ 1.3)
+      if (px*px + py*py + pz*pz >= 1.8) continue;
 
       let sum = 0;
-      for (let k = 0; k < nPts; k++) {
-        const b = k * 5;
-        const dx = sp[b] - px, dy = sp[b+1] - py, dz = sp[b+2] - pz;
+      for (let n = 0; n < nPts; n++) {
+        const b = n * 5;
+        const dx = surfPts[b] - px, dy = surfPts[b+1] - py, dz = surfPts[b+2] - pz;
         const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
-        if (d < 0.001) continue;
-        const w = sp[b+3] * sp[b+4];
-        if (encoding === 'magnitude') { sum += w / d; }
-        else if (encoding === 'signed') { sum += w * (sp[b]*dx + sp[b+1]*dy + sp[b+2]*dz) / (d*d); }
-        else { sum += w / (d*d); }
+        if (d < 0.01) continue;
+        const wt = surfPts[b+3] * surfPts[b+4];
+        if (encoding === 'magnitude') sum += Math.abs(wt) / d;
+        else if (encoding === 'signed') sum += wt * (surfPts[b]*dx + surfPts[b+1]*dy + surfPts[b+2]*dz) / (d*d);
+        else sum += wt / (d*d);
       }
-      density[j * sliceSize + i] = sum;
+      density[pj * sliceSize + pi] = sum;
       const a = sum < 0 ? -sum : sum;
       if (a > maxAbs) maxAbs = a;
     }
   }
-  self.postMessage({ density, sliceSize, maxAbs, jobId }, [density.buffer]);
-};
-`;
 
-const worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
+  currentSliceData = { density, sliceSize, maxAbs };
+}
 
 // ============================================================
-// MAIN THREAD
+// DRAWING
 // ============================================================
 const mainCanvas = document.getElementById('mainCanvas');
 const mainCtx = mainCanvas.getContext('2d');
 const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
+const geomCanvas = document.getElementById('geomCanvas');
+const geomCtx = geomCanvas.getContext('2d');
 const legendCanvas = document.getElementById('legendCanvas');
 const legendCtx = legendCanvas.getContext('2d');
 
-const patternSelect = document.getElementById('patternSelect');
-const sliceAxis = document.getElementById('sliceAxis');
-const slicePos = document.getElementById('slicePos');
-const slicePosVal = document.getElementById('slicePosVal');
-const encodingMode = document.getElementById('encodingMode');
-const surfRes = document.getElementById('surfRes');
-const surfResVal = document.getElementById('surfResVal');
-const infoLine = document.getElementById('infoLine');
-const playBtn = document.getElementById('playBtn');
-const resetBtn = document.getElementById('resetBtn');
-const speedSlider = document.getElementById('speedSlider');
-const speedVal = document.getElementById('speedVal');
-const timeDisplay = document.getElementById('timeDisplay');
-const fpsCounter = document.getElementById('fpsCounter');
-const computingInd = document.getElementById('computingInd');
-
-// State
-let playing = false;
-let currentT = 0;
-let lastFrameTime = 0;
-let jobCounter = 0;
-let pendingJob = null;
-let computing = false;
-let currentData = null;
-let fpsFrames = 0;
-let fpsLastCheck = performance.now();
-
-// ---- Pattern functions (main thread — map drawing only) ----
-function patternEarth(theta, phi, t) {
-  const lat = Math.PI / 2 - theta;
-  const lon = phi - Math.PI + t * 0.5;
-  const blobs = [
-    { lat: 0.8, lon: -0.5, r: 0.55 }, { lat: 0.2, lon: -0.8, r: 0.35 },
-    { lat: 0.85, lon: 0.2, r: 0.4 }, { lat: 0.6, lon: 0.5, r: 0.55 },
-    { lat: 0.7, lon: 1.5, r: 0.6 }, { lat: -0.5, lon: 2.0, r: 0.45 },
-    { lat: -1.2, lon: 0.0, r: 0.5 },
-  ];
-  for (const b of blobs) {
-    const dlat = lat - b.lat;
-    const dlon = ((lon - b.lon + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    if (Math.sqrt(dlat * dlat + dlon * dlon * Math.cos(lat) * Math.cos(lat)) < b.r) return 1.0;
-  }
-  return 0.0;
-}
-function patternSingleCap(theta, phi, t) { return theta < (0.6 + 0.3 * Math.sin(t)) ? 1 : 0; }
-function patternTwoCaps(theta, phi, t) { const s = 0.5 + 0.2 * Math.sin(t * 2); return (theta < s || theta > Math.PI - s) ? 1 : 0; }
-function patternBand(theta, phi, t) { return Math.abs(theta - (Math.PI/2 + 0.3*Math.sin(t))) < (0.3 + 0.15*Math.cos(t*1.5)) ? 1 : 0; }
-function patternSpots(theta, phi, t) { return (Math.sin(theta*5.1+t*0.3)*Math.sin(phi*3.7+t*0.2)+Math.sin(theta*7.3-t*0.15)*Math.cos(phi*5.1)) > 0.5 ? 1 : 0; }
-function patternChecker(theta, phi, t) { return (Math.floor(theta/Math.PI*6)+Math.floor((phi+t*0.3)/(2*Math.PI)*12))%2===0 ? 1 : 0; }
-const patternsMain = { earth: patternEarth, single_cap: patternSingleCap, two_caps: patternTwoCaps, band: patternBand, spots: patternSpots, checker: patternChecker };
-
-// ---- Color map ----
 function densityColor(val, maxAbs) {
   if (maxAbs === 0) return [10, 10, 15, 255];
   const norm = val / maxAbs;
@@ -524,61 +645,28 @@ function densityColor(val, maxAbs) {
   return [r, g, b, 255];
 }
 
-// ---- Dispatch to worker ----
-function requestCompute() {
-  const jobId = ++jobCounter;
-  pendingJob = jobId;
-  computing = true;
-  computingInd.classList.add('visible');
-  worker.postMessage({
-    pattern: patternSelect.value,
-    axis: sliceAxis.value,
-    sliceVal: parseInt(slicePos.value) / 100,
-    res: surfRes.value,
-    encoding: encodingMode.value,
-    tVal: currentT,
-    jobId
-  });
-}
-
-// ---- Worker result ----
-const offscreen = document.createElement('canvas');
-const offCtx = offscreen.getContext('2d');
-
-worker.onmessage = function(e) {
-  const { density, sliceSize, maxAbs, jobId } = e.data;
-  if (jobId !== pendingJob) return;
-
-  computing = false;
-  computingInd.classList.remove('visible');
-  currentData = { density, sliceSize, maxAbs };
-
-  drawSlice(currentData);
-  drawMap(patternSelect.value, currentT);
-  fpsFrames++;
-
-  if (playing) requestAnimationFrame(animationTick);
-};
-
-// ---- Draw slice ----
-function drawSlice(data) {
+function drawSlice() {
+  if (!currentSliceData) return;
+  const data = currentSliceData;
   const wrap = mainCanvas.parentElement;
-  const dim = Math.min(wrap.clientWidth - 40, wrap.clientHeight - 40, 600);
+  const dim = Math.min(wrap.clientWidth - 240, wrap.clientHeight - 20, 550);
   mainCanvas.width = dim; mainCanvas.height = dim;
   mainCanvas.style.width = dim + 'px'; mainCanvas.style.height = dim + 'px';
 
-  offscreen.width = data.sliceSize; offscreen.height = data.sliceSize;
-  const imgData = offCtx.createImageData(data.sliceSize, data.sliceSize);
-  const d = imgData.data;
+  const off = document.createElement('canvas');
+  off.width = data.sliceSize; off.height = data.sliceSize;
+  const octx = off.getContext('2d');
+  const imgData = octx.createImageData(data.sliceSize, data.sliceSize);
   for (let j = 0; j < data.sliceSize; j++) {
     for (let i = 0; i < data.sliceSize; i++) {
       const val = data.density[j * data.sliceSize + i];
       const [r, g, b, a] = densityColor(val, data.maxAbs);
       const idx = (j * data.sliceSize + i) * 4;
-      d[idx] = r; d[idx+1] = g; d[idx+2] = b; d[idx+3] = a;
+      imgData.data[idx] = r; imgData.data[idx+1] = g;
+      imgData.data[idx+2] = b; imgData.data[idx+3] = a;
     }
   }
-  offCtx.putImageData(imgData, 0, 0);
+  octx.putImageData(imgData, 0, 0);
 
   mainCtx.imageSmoothingEnabled = true;
   mainCtx.clearRect(0, 0, dim, dim);
@@ -586,55 +674,129 @@ function drawSlice(data) {
   mainCtx.beginPath();
   mainCtx.arc(dim/2, dim/2, dim/2 - 2, 0, Math.PI * 2);
   mainCtx.clip();
-  mainCtx.drawImage(offscreen, 0, 0, dim, dim);
+  mainCtx.drawImage(off, 0, 0, dim, dim);
   mainCtx.restore();
 
-  mainCtx.strokeStyle = 'rgba(74, 240, 192, 0.3)';
-  mainCtx.lineWidth = 1.5;
+  // Draw deformed boundary outline on slice
+  mainCtx.strokeStyle = 'rgba(74, 240, 192, 0.25)';
+  mainCtx.lineWidth = 1;
   mainCtx.beginPath();
-  mainCtx.arc(dim/2, dim/2, dim/2 - 2, 0, Math.PI * 2);
+  const axis = document.getElementById('sliceAxis').value;
+  const sv = parseInt(document.getElementById('slicePos').value) / 100;
+  for (let a = 0; a <= 360; a += 2) {
+    const angle = a * Math.PI / 180;
+    // Find radius at this angle on the slice plane
+    let theta, phi;
+    if (axis === 'z') {
+      // Slice is XY at z=sv. angle sweeps in XY.
+      // We need theta, phi from (cos(a), sin(a), sv)
+      const x = Math.cos(angle), y = Math.sin(angle);
+      const rr = Math.sqrt(x*x + y*y + sv*sv);
+      theta = Math.acos(sv / rr);
+      phi = Math.atan2(y, x); if (phi < 0) phi += 2 * Math.PI;
+    } else if (axis === 'y') {
+      const x = Math.cos(angle), z = Math.sin(angle);
+      const rr = Math.sqrt(x*x + sv*sv + z*z);
+      theta = Math.acos(z / rr);
+      phi = Math.atan2(sv, x); if (phi < 0) phi += 2 * Math.PI;
+    } else {
+      const y = Math.cos(angle), z = Math.sin(angle);
+      const rr = Math.sqrt(sv*sv + y*y + z*z);
+      theta = Math.acos(z / rr);
+      phi = Math.atan2(y, sv); if (phi < 0) phi += 2 * Math.PI;
+    }
+    // Sample radius
+    const j = Math.min(GRID_THETA - 1, Math.max(0, Math.floor(theta / Math.PI * GRID_THETA)));
+    const i = Math.min(GRID_PHI - 1, Math.max(0, Math.floor(phi / (2 * Math.PI) * GRID_PHI)));
+    const r = radius[j * GRID_PHI + i];
+    // Project to canvas
+    const cx = dim/2 + Math.cos(angle) * r * (dim/2 - 2);
+    const cy = dim/2 + Math.sin(angle) * r * (dim/2 - 2);
+    if (a === 0) mainCtx.moveTo(cx, cy);
+    else mainCtx.lineTo(cx, cy);
+  }
+  mainCtx.closePath();
   mainCtx.stroke();
 
-  const axis = sliceAxis.value;
-  mainCtx.fillStyle = 'rgba(200,200,212,0.5)';
-  mainCtx.font = '11px "IBM Plex Mono"';
+  // Axis labels
+  mainCtx.fillStyle = 'rgba(200,200,212,0.4)';
+  mainCtx.font = '10px "IBM Plex Mono"';
   mainCtx.textAlign = 'center';
   let hL, vL;
   if (axis === 'z') { hL = 'X'; vL = 'Y'; }
   else if (axis === 'y') { hL = 'X'; vL = 'Z'; }
   else { hL = 'Y'; vL = 'Z'; }
-  mainCtx.fillText('-' + hL, 14, dim/2 + 4);
-  mainCtx.fillText('+' + hL, dim - 14, dim/2 + 4);
-  mainCtx.fillText('-' + vL, dim/2, 14);
-  mainCtx.fillText('+' + vL, dim/2, dim - 6);
+  mainCtx.fillText('-'+hL, 12, dim/2+4);
+  mainCtx.fillText('+'+hL, dim-12, dim/2+4);
+  mainCtx.fillText('-'+vL, dim/2, 12);
+  mainCtx.fillText('+'+vL, dim/2, dim-4);
 }
 
-// ---- Draw 2D map ----
-function drawMap(pattern, tVal) {
+function drawMap() {
   const w = mapCanvas.width, h = mapCanvas.height;
   const imgData = mapCtx.createImageData(w, h);
-  const fn = patternsMain[pattern];
-  for (let j = 0; j < h; j++) {
-    const theta = (j + 0.5) / h * Math.PI;
-    for (let i = 0; i < w; i++) {
-      const phi = (i + 0.5) / w * 2 * Math.PI;
-      const val = fn(theta, phi, tVal);
-      const idx = (j * w + i) * 4;
-      if (val > 0.5) { imgData.data[idx]=74; imgData.data[idx+1]=240; imgData.data[idx+2]=192; imgData.data[idx+3]=200; }
-      else { imgData.data[idx]=18; imgData.data[idx+1]=18; imgData.data[idx+2]=30; imgData.data[idx+3]=255; }
+  const d = imgData.data;
+  // Fill background
+  for (let idx = 0; idx < w * h * 4; idx += 4) {
+    d[idx] = 14; d[idx+1] = 14; d[idx+2] = 22; d[idx+3] = 255;
+  }
+  // Overlay each visible layer
+  for (let k = 0; k < numLayers; k++) {
+    if (!layerVisible[k]) continue;
+    const col = LAYER_COLORS[k % LAYER_COLORS.length];
+    const alpha = 0.6;
+    for (let pj = 0; pj < h; pj++) {
+      const j = Math.floor(pj / h * GRID_THETA);
+      for (let pi = 0; pi < w; pi++) {
+        const i = Math.floor(pi / w * GRID_PHI);
+        if (layers[k][j * GRID_PHI + i]) {
+          const idx = (pj * w + pi) * 4;
+          d[idx]   = Math.min(255, d[idx]   + col[0] * alpha | 0);
+          d[idx+1] = Math.min(255, d[idx+1] + col[1] * alpha | 0);
+          d[idx+2] = Math.min(255, d[idx+2] + col[2] * alpha | 0);
+        }
+      }
     }
   }
   mapCtx.putImageData(imgData, 0, 0);
-  mapCtx.strokeStyle = 'rgba(255,255,255,0.06)';
-  mapCtx.lineWidth = 0.5;
-  for (let i = 1; i < 8; i++) { mapCtx.beginPath(); mapCtx.moveTo(i*w/8, 0); mapCtx.lineTo(i*w/8, h); mapCtx.stroke(); }
-  for (let j = 1; j < 4; j++) { mapCtx.beginPath(); mapCtx.moveTo(0, j*h/4); mapCtx.lineTo(w, j*h/4); mapCtx.stroke(); }
 }
 
-// ---- Legend ----
+function drawGeometry() {
+  const w = geomCanvas.width, h = geomCanvas.height;
+  const imgData = geomCtx.createImageData(w, h);
+  const d = imgData.data;
+  // Find min/max radius
+  let rMin = Infinity, rMax = -Infinity;
+  for (let idx = 0; idx < radius.length; idx++) {
+    if (radius[idx] < rMin) rMin = radius[idx];
+    if (radius[idx] > rMax) rMax = radius[idx];
+  }
+  const rRange = rMax - rMin || 1;
+
+  for (let pj = 0; pj < h; pj++) {
+    const j = Math.floor(pj / h * GRID_THETA);
+    for (let pi = 0; pi < w; pi++) {
+      const i = Math.floor(pi / w * GRID_PHI);
+      const r = radius[j * GRID_PHI + i];
+      const norm = (r - rMin) / rRange; // 0 = min, 1 = max
+      const idx = (pj * w + pi) * 4;
+      // Concave (small r) = warm, convex (large r) = cool
+      if (norm < 0.5) {
+        const s = 1 - norm * 2;
+        d[idx] = 200 * s | 0; d[idx+1] = 60 * s | 0; d[idx+2] = 30 | 0;
+      } else {
+        const s = (norm - 0.5) * 2;
+        d[idx] = 20 | 0; d[idx+1] = 80 * s | 0; d[idx+2] = 200 * s | 0;
+      }
+      d[idx+3] = 255;
+    }
+  }
+  geomCtx.putImageData(imgData, 0, 0);
+}
+
 function drawLegend() {
   const w = legendCanvas.width = legendCanvas.clientWidth * 2;
-  const h = legendCanvas.height = 28;
+  const h = legendCanvas.height = 24;
   for (let i = 0; i < w; i++) {
     const [r, g, b] = densityColor((i/(w-1))*2 - 1, 1);
     legendCtx.fillStyle = `rgb(${r},${g},${b})`;
@@ -642,74 +804,151 @@ function drawLegend() {
   }
 }
 
-// ---- Animation loop ----
-function animationTick(timestamp) {
-  if (!playing) return;
-  if (!lastFrameTime) lastFrameTime = timestamp;
-
-  const speed = parseInt(speedSlider.value) / 100;
-  const dt = (timestamp - lastFrameTime) / 1000;
-  lastFrameTime = timestamp;
-  currentT += dt * speed * 2;
-
-  timeDisplay.textContent = `t = ${currentT.toFixed(3)}`;
-  speedVal.textContent = speed.toFixed(2);
-
-  // FPS
-  const now = performance.now();
-  if (now - fpsLastCheck > 1000) {
-    fpsCounter.innerHTML = `FPS: <span>${Math.round(fpsFrames / ((now - fpsLastCheck) / 1000))}</span>`;
-    fpsFrames = 0;
-    fpsLastCheck = now;
+// ============================================================
+// LAYER TOGGLES UI
+// ============================================================
+function buildLayerToggles() {
+  const container = document.getElementById('layerToggles');
+  container.innerHTML = '';
+  for (let k = 0; k < numLayers; k++) {
+    const col = LAYER_COLORS[k % LAYER_COLORS.length];
+    const div = document.createElement('div');
+    div.className = 'layer-tog' + (layerVisible[k] ? '' : ' off');
+    div.innerHTML = `<div class="swatch" style="background:rgb(${col.join(',')})"></div>Layer ${k + 1} (w=${LAYER_WEIGHTS[k] >= 0 ? '+' : ''}${(LAYER_WEIGHTS[k] || 0.5).toFixed(1)})`;
+    div.addEventListener('click', () => {
+      layerVisible[k] = !layerVisible[k];
+      div.classList.toggle('off', !layerVisible[k]);
+      fullRender();
+    });
+    container.appendChild(div);
   }
-
-  // Only dispatch if worker is free — otherwise onmessage will re-trigger
-  if (!computing) requestCompute();
 }
 
-// ---- Controls ----
-playBtn.addEventListener('click', () => {
+// ============================================================
+// STATUS
+// ============================================================
+function updateStatus() {
+  let total = 0;
+  for (let k = 0; k < numLayers; k++) {
+    for (let idx = 0; idx < layers[k].length; idx++) total += layers[k][idx];
+  }
+  document.getElementById('statusBar').innerHTML =
+    `Gen: <span>${generation}</span> | Cells: <span>${total}</span> / ${numLayers * GRID_THETA * GRID_PHI}`;
+  document.getElementById('timeDisp').textContent = `gen ${generation}`;
+}
+
+// ============================================================
+// FULL RENDER PIPELINE
+// ============================================================
+function fullRender() {
+  computeSlice();
+  drawSlice();
+  drawMap();
+  drawGeometry();
+}
+
+// ============================================================
+// PLAY / STEP / RESET
+// ============================================================
+function doStep() {
+  step();
+  fullRender();
+}
+
+document.getElementById('playBtn').addEventListener('click', () => {
   playing = !playing;
-  playBtn.innerHTML = playing ? '&#9208;' : '&#9654;';
-  playBtn.classList.toggle('active', playing);
-  if (playing) { lastFrameTime = 0; requestAnimationFrame(animationTick); }
+  const btn = document.getElementById('playBtn');
+  btn.innerHTML = playing ? '&#9208;' : '&#9654;';
+  btn.classList.toggle('active', playing);
+  if (playing) runPlay();
+  else clearTimeout(playTimer);
 });
 
-resetBtn.addEventListener('click', () => {
-  currentT = 0;
-  timeDisplay.textContent = 't = 0.000';
-  if (!playing && !computing) requestCompute();
+document.getElementById('stepBtn').addEventListener('click', () => {
+  if (!playing) doStep();
 });
 
-function manualRender() { if (!playing && !computing) requestCompute(); }
-patternSelect.addEventListener('change', manualRender);
-sliceAxis.addEventListener('change', manualRender);
-slicePos.addEventListener('input', () => { slicePosVal.textContent = (parseInt(slicePos.value)/100).toFixed(2); manualRender(); });
-encodingMode.addEventListener('change', manualRender);
-surfRes.addEventListener('input', () => { surfResVal.textContent = surfRes.value; manualRender(); });
-speedSlider.addEventListener('input', () => { speedVal.textContent = (parseInt(speedSlider.value)/100).toFixed(2); });
+document.getElementById('resetBtn').addEventListener('click', () => {
+  playing = false;
+  clearTimeout(playTimer);
+  document.getElementById('playBtn').innerHTML = '&#9654;';
+  document.getElementById('playBtn').classList.remove('active');
+  initLayers();
+  fullRender();
+});
+
+function runPlay() {
+  if (!playing) return;
+  const delay = parseInt(document.getElementById('delaySlider').value);
+  doStep();
+  playTimer = setTimeout(runPlay, delay);
+}
+
+// ============================================================
+// CONTROL LISTENERS
+// ============================================================
+document.getElementById('delaySlider').addEventListener('input', function() {
+  document.getElementById('delayVal').textContent = this.value;
+});
+document.getElementById('initDensity').addEventListener('input', function() {
+  document.getElementById('initDensVal').textContent = this.value + '%';
+});
+document.getElementById('couplingStr').addEventListener('input', function() {
+  document.getElementById('couplingVal').textContent = (this.value / 100).toFixed(2);
+});
+document.getElementById('killThresh').addEventListener('input', function() {
+  document.getElementById('killVal').textContent = (this.value / 100).toFixed(2);
+});
+document.getElementById('deformStr').addEventListener('input', function() {
+  document.getElementById('deformVal').textContent = (this.value / 100).toFixed(2);
+});
+document.getElementById('geomSmooth').addEventListener('input', function() {
+  document.getElementById('geomSmoothVal').textContent = this.value;
+});
+document.getElementById('slicePos').addEventListener('input', function() {
+  document.getElementById('slicePosVal').textContent = (this.value / 100).toFixed(2);
+  fullRender();
+});
+document.getElementById('surfRes').addEventListener('input', function() {
+  document.getElementById('surfResVal').textContent = this.value;
+  fullRender();
+});
+document.getElementById('sliceAxis').addEventListener('change', fullRender);
+document.getElementById('encodingMode').addEventListener('change', fullRender);
+document.getElementById('numLayers').addEventListener('change', () => {
+  const wasPlaying = playing;
+  playing = false; clearTimeout(playTimer);
+  document.getElementById('playBtn').innerHTML = '&#9654;';
+  document.getElementById('playBtn').classList.remove('active');
+  initLayers();
+  fullRender();
+});
 
 // Hover
 mainCanvas.addEventListener('mousemove', (e) => {
-  if (!currentData) return;
+  if (!currentSliceData) return;
   const rect = mainCanvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left) / rect.width;
   const my = (e.clientY - rect.top) / rect.height;
   if ((mx*2-1)**2 + (my*2-1)**2 < 1) {
-    const pi = mx * currentData.sliceSize | 0;
-    const pj = my * currentData.sliceSize | 0;
-    if (pi >= 0 && pi < currentData.sliceSize && pj >= 0 && pj < currentData.sliceSize) {
-      const val = currentData.density[pj * currentData.sliceSize + pi];
-      infoLine.innerHTML = `Density: <span>${val.toFixed(4)}</span> | Max: <span>${currentData.maxAbs.toFixed(4)}</span>`;
+    const pi = mx * currentSliceData.sliceSize | 0;
+    const pj = my * currentSliceData.sliceSize | 0;
+    if (pi >= 0 && pi < currentSliceData.sliceSize && pj >= 0 && pj < currentSliceData.sliceSize) {
+      const val = currentSliceData.density[pj * currentSliceData.sliceSize + pi];
+      document.getElementById('infoLine').innerHTML =
+        `Density: <span>${val.toFixed(4)}</span> | Max: <span>${currentSliceData.maxAbs.toFixed(4)}</span>`;
     }
   }
 });
 
-window.addEventListener('resize', () => { if (currentData) drawSlice(currentData); });
+window.addEventListener('resize', () => { if (currentSliceData) drawSlice(); });
 
-// ---- Init ----
+// ============================================================
+// INIT
+// ============================================================
+initLayers();
 drawLegend();
-requestCompute();
+fullRender();
 </script>
 </body>
 </html>
